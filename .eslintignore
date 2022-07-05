@@ -1,0 +1,7 @@
+node_modules/
+dist/
+examples/
+test/
+*.config.js
+src/polyfill/eventsource.js
+src/polyfill/eventsource.d.ts
