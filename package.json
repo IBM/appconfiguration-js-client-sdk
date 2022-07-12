@@ -1,6 +1,6 @@
 {
   "name": "ibm-appconfiguration-js-client-sdk",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "IBM Cloud App Configuration JavaScript Client SDK",
   "keywords": [
     "client-sdk",
@@ -18,6 +18,9 @@
   "author": "IBM",
   "main": "dist/src/index.js",
   "unpkg": "dist/appconfiguration.js",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "npm run clean && npm run build:tsc && npm run build:webpack",
     "build:tsc": "tsc",
@@ -33,7 +36,6 @@
   },
   "devDependencies": {
     "@types/jest": "^28.1.1",
-    "@types/murmurhash": "^2.0.0",
     "@typescript-eslint/eslint-plugin": "^5.27.1",
     "@typescript-eslint/parser": "^5.27.1",
     "del-cli": "^4.0.1",
