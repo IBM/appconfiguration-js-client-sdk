@@ -1,7 +1,7 @@
 node_modules/
 dist/
-examples/
 test/
+example/
 *.config.js
 src/polyfill/eventsource.js
 src/polyfill/eventsource.d.ts
