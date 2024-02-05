@@ -18,6 +18,9 @@ import * as Constants from '../utils/constants';
 import Metering from '../utils/metering';
 import { getCacheInstance } from './Cache';
 import PropertySegmentRule, { IPropertySegmentRule } from './PropertySegmentRule';
+import { Logger } from '../utils/logger';
+
+const logger = new Logger(Constants.APP_CONFIGURATION);
 
 export interface IProperty {
     name: string;
@@ -126,9 +129,9 @@ export default class Property {
      * The data type of returned value matches that of property.
      * @memberof Property
      */
-    public getCurrentValue(entityId: string, entityAttributes: { [x: string]: any; }): any {
+    public getCurrentValue(entityId: string, entityAttributes: { [x: string]: any; } = {}): any {
         if (!entityId) {
-            console.log(''.concat(Constants.APP_CONFIGURATION, 'Property evaluation: ', Constants.INVALID_ENTITY_ID, ' getCurrentValue'));
+            logger.log(''.concat('Property evaluation: ', Constants.INVALID_ENTITY_ID, ' getCurrentValue'));
             return null;
         }
 

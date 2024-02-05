@@ -19,6 +19,9 @@ import { getNormalizedValue } from '../utils/hashing';
 import Metering from '../utils/metering';
 import { getCacheInstance } from './Cache';
 import FeatureSegmentRule, { IFeatureSegmentRule } from './FeatureSegmentRule';
+import { Logger } from '../utils/logger';
+
+const logger = new Logger(Constants.APP_CONFIGURATION);
 
 export interface IFeature {
     name: string;
@@ -153,9 +156,9 @@ export default class Feature {
      * The data type of returned value matches that of feature flag.
      * @memberof Feature
      */
-    public getCurrentValue(entityId: string, entityAttributes: { [x: string]: any; }): any {
+    public getCurrentValue(entityId: string, entityAttributes: { [x: string]: any; } = {}): any {
         if (!entityId) {
-            console.log(''.concat(Constants.APP_CONFIGURATION, 'Feature flag evaluation: ', Constants.INVALID_ENTITY_ID, ' getCurrentValue'));
+            logger.log(''.concat('Feature flag evaluation: ', Constants.INVALID_ENTITY_ID, ' getCurrentValue'));
             return null;
         }
 

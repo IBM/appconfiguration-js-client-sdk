@@ -14,16 +14,10 @@
  * limitations under the License.
  */
 
-import { IFeature } from './Feature';
-import { IProperty } from './Property';
 import { ISegment } from './Segment';
+import { IEnvironment } from './Environments';
 
-export interface ConfigResponse {
-    features: IFeature[];
-    properties: IProperty[];
+export interface SdkConfigResponse {
+    environments: IEnvironment[];
     segments: ISegment[];
-}
-
-export function instanceOfConfigResponse(obj: any): obj is ConfigResponse {
-    return 'features' in obj && 'properties' in obj && 'segments' in obj;
 }
