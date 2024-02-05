@@ -26,7 +26,10 @@
     <!-- Load from locally generated minified js -->
     <script type="text/javascript" src="../dist/appconfiguration.js"></script>
 
-    <script type="text/javascript">
+    <script type="module">
+
+        const appConfigClient = AppConfiguration.getInstance();
+
         // TODO: Provide your own values
         var region = 'region';
         var guid = 'guid';
@@ -34,23 +37,40 @@
         var collectionId = 'collectionId';
         var environmentId = 'environmentId';
 
-        var appConfigClient = AppConfiguration.getInstance();
-        appConfigClient.init(region, guid, apikey);
-        appConfigClient.setContext(collectionId, environmentId);
+        async function initialiseAppConfig() {
+            appConfigClient.init(region, guid, apikey);
+            await appConfigClient.setContext(collectionId, environmentId);
+        }
 
-        appConfigClient.emitter.on('configurationUpdate', function () {
-            const feature = appConfigClient.getFeature('weekend-discount');
-            const property = appConfigClient.getProperty('users-location');
-            let entityId = 'user'
-            let entityAttributes = { email: 'user@company.com' }
+        try {
+            await initialiseAppConfig();
+            console.log("app configuration sdk init successful");
+        } catch (e) {
+            console.error("failed to initialise app configuration sdk", e);
+        }
 
-            console.log("\nFeature flag\n")
-            console.log('Is feature flag enabled? ', feature.isEnabled())
-            console.log('Feature flag evaluated value is ', feature.getCurrentValue(entityId, entityAttributes))
+        let entityId = 'user'
+        let entityAttributes = { email: 'user@company.com' }
 
-            console.log("\nProperty\n")
-            console.log('Property evaluated value is ', property.getCurrentValue(entityId, entityAttributes))
-        })
+        // Read feature flag's enabled state & evaluated value
+        const feature = appConfigClient.getFeature('weekend-discount');
+        console.log("\nFeature flag\n")
+        console.log('Is feature flag enabled? ', feature.isEnabled())
+        console.log('Feature flag evaluated value is ', feature.getCurrentValue(entityId, entityAttributes))
+
+
+        // Read property's evaluated value
+        const property = appConfigClient.getProperty('users-location');
+        console.log("\nProperty\n")
+        console.log('Property evaluated value is ', property.getCurrentValue(entityId, entityAttributes))
+
+        appConfigClient.emitter.on('configurationUpdate', () => {
+            // **add your code**
+            // To find the effect of any configuration changes, you can call the feature or property related methods
+
+            // feature = appConfigClient.getFeature('weekend-discount');
+            // newValue = feature.getCurrentValue(entityId, entityAttributes);
+        });
     </script>
 
 </head>

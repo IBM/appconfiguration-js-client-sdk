@@ -27,13 +27,13 @@ The SDK is supported on all major browsers. The Browser should have `fetch()` AP
 Install the SDK. Use the following code to install as a module from package manager.
 
 ```sh
-npm install ibm-appconfiguration-js-client-sdk@latest
+npm install ibm-appconfiguration-js-client-sdk
 ```
 You can import the SDK into the script tag either by referencing it from a hosted site on your backend or from a CDN as follows:
   
 Example:
 ```html
-    <script type="text/javascript" src="https://unpkg.com/ibm-appconfiguration-js-client-sdk@latest/dist/appconfiguration.js"></script>
+    <script type="text/javascript" src="https://unpkg.com/ibm-appconfiguration-js-client-sdk/dist/appconfiguration.js"></script>
 ```
 
 ## Initialize SDK
@@ -49,54 +49,72 @@ const collectionId = 'airlines-webapp';
 const environmentId = 'dev';
 
 const appConfigClient = AppConfiguration.getInstance();
-appConfigClient.init(region, guid, apikey);
-await appConfigClient.setContext(collectionId, environmentId);
+
+async function initialiseAppConfig() {
+    appConfigClient.init(region, guid, apikey);
+    await appConfigClient.setContext(collectionId, environmentId);
+}
+
+try {
+    await initialiseAppConfig();
+    console.log("app configuration sdk init successful");
+} catch (e) {
+    console.error("failed to initialise app configuration sdk", e);
+}
 ```
 
-:red_circle: **Important** :red_circle:
+In the above snippet, the async function `initialiseAppConfig()` will return an `Promise<void>` that resolves when the configurations are successfully fetched. Else, throws error if unsuccessful.
 
-The **`init()`** and **`setContext()`** are the initialisation methods and should be invoked **only once** using appConfigClient. The appConfigClient, once initialised, can be obtained across modules using **`AppConfiguration.getInstance()`**.
+> :warning: It is expected that initialisation to be done **only once**.
 
-- region : Region name where the App Configuration service instance is created. Use
-    - `AppConfiguration.REGION_US_SOUTH` for Dallas
-    - `AppConfiguration.REGION_EU_GB` for London
-    - `AppConfiguration.REGION_AU_SYD` for Sydney
-    - `AppConfiguration.REGION_US_EAST` for Washington DC
-- guid : Instance Id of the App Configuration service. Obtain it from the service credentials section of the App
-  Configuration dashboard.
-- apikey : ApiKey of the App Configuration service. Obtain it from the service credentials section of the App
-  Configuration dashboard.
-- collectionId: Id of the collection created in App Configuration service instance under the **Collections** section.
-- environmentId: Id of the environment created in App Configuration service instance under the **Environments** section.
+After the SDK is initialised successfully the feature flag & properties can be retrieved using the `appConfigClient` as shown in the below code snippet.
+<details><summary>Expand to view the example snippet</summary>
+
+```js
+// other-file.js
+const appConfigClient = AppConfiguration.getInstance();
+
+const feature = appConfigClient.getFeature('online-check-in');
+const result = feature.getCurrentValue(entityId, entityAttributes);
+console.log(result);
+
+const property = appConfigClient.getProperty('check-in-charges');
+const result = property.getCurrentValue(entityId, entityAttributes);
+console.log(result);
+```
+</details>
+
+where, 
+- **region** : Region name where the App Configuration service instance is created.
+    - `us-south` for Dallas
+    - `eu-gb` for London
+    - `au-syd` for Sydney
+    - `us-east` for Washington DC
+- **guid** : Instance ID of the App Configuration service. Obtain it from the service credentials section of the App Configuration dashboard.
+- **apikey** : ApiKey of the App Configuration service. Obtain it from the service credentials section of the App Configuration dashboard.
+- **collectionId**: ID of the collection created in App Configuration service instance under the **Collections** section.
+- **environmentId**: ID of the environment created in App Configuration service instance under the **Environments** section.
 
 :red_circle: **Important** :red_circle:
 
 Ensure to create the service credentials of the role **`Client SDK`** for using with the JavaScript SDK. API key of the **`Client SDK`** role has minimal access permissions that are suitable to use in browser based applications.
 
-
-**Important**
-
-There might be timeout errors in the browser console related to communication to the App Configuration backend, while using with the SDK. This is expected as part of the limitation of the streaming API and can be ignored.  
-
 ## Get single feature
 
 ```javascript
-const feature = appConfigClient.getFeature('online-check-in'); // feature can be null incase of an invalid feature id
-
-if (feature != null) {
-  console.log(`Feature Name ${feature.getFeatureName()} `);
-  console.log(`Feature Id ${feature.getFeatureId()} `);
-  console.log(`Feature Type ${feature.getFeatureDataType()} `);
-}
+const feature = appConfigClient.getFeature('featureId'); // throws error incase the featureId is invalid or doesn't exist
+console.log(`Feature Name ${feature.getFeatureName()} `);
+console.log(`Feature Id ${feature.getFeatureId()} `);
+console.log(`Feature Type ${feature.getFeatureDataType()} `);
 ```
 
 ## Get all features
 
 ```javascript
 const features = appConfigClient.getFeatures();
-const feature = features['online-check-in'];
+const feature = features['featureId'];
 
-if (feature != null) {
+if (feature !== undefined) {
   console.log(`Feature Name ${feature.getFeatureName()} `);
   console.log(`Feature Id ${feature.getFeatureId()} `);
   console.log(`Feature Type ${feature.getFeatureDataType()} `);
@@ -116,6 +134,7 @@ const entityAttributes = {
   country: 'India',
 };
 
+const feature = appConfigClient.getFeature('featureId');
 const featureValue = feature.getCurrentValue(entityId, entityAttributes);
 ```
 - entityId: Id of the Entity. This will be a string identifier related to the Entity against which the feature is evaluated. For example, an entity might be an instance of an app that runs on a mobile device, or a user accessing the web application. For any entity to interact with App Configuration, it must provide a unique entity ID.
@@ -124,22 +143,19 @@ const featureValue = feature.getCurrentValue(entityId, entityAttributes);
 ## Get single property
 
 ```javascript
-const property = appConfigClient.getProperty('check-in-charges'); // property can be null incase of an invalid property id
-
-if (property != null) {
-  console.log(`Property Name ${property.getPropertyName()} `);
-  console.log(`Property Id ${property.getPropertyId()} `);
-  console.log(`Property Type ${property.getPropertyDataType()} `);
-}
+const property = appConfigClient.getProperty('propertyId'); // throws error incase the propertyId is invalid or doesn't exist
+console.log(`Property Name ${property.getPropertyName()} `);
+console.log(`Property Id ${property.getPropertyId()} `);
+console.log(`Property Type ${property.getPropertyDataType()} `);
 ```
 
 ## Get all properties
 
 ```javascript
 const properties = appConfigClient.getProperties();
-const property = properties['check-in-charges'];
+const property = properties['propertyId'];
 
-if (property != null) {
+if (property !== undefined) {
   console.log(`Property Name ${property.getPropertyName()} `);
   console.log(`Property Id ${property.getPropertyId()} `);
   console.log(`Property Type ${property.getPropertyDataType()} `);
@@ -158,6 +174,7 @@ const entityAttributes = {
   country: 'India',
 };
 
+const property = appConfigClient.getProperty('propertyId');
 const propertyValue = property.getCurrentValue(entityId, entityAttributes);
 ```
 - entityId: Id of the Entity. This will be a string identifier related to the Entity against which the property is evaluated. For example, an entity might be an instance of an app that runs on a mobile device, or a user accessing the web application. For any entity to interact with App Configuration, it must provide a unique entity ID.
@@ -171,13 +188,13 @@ format accordingly as shown in the below table.
 
 <details><summary>View Table</summary>
 
-| **Feature or Property value**                                                                          | **DataType** | **DataFormat** | **Type of data returned <br> by `getCurrentValue()`** | **Example output**                                                   |
-| ------------------------------------------------------------------------------------------------------ | ------------ | -------------- | ----------------------------------------------------- | -------------------------------------------------------------------- |
-| `true`                                                                                                 | BOOLEAN      | not applicable | `boolean`                                                | `true`                                                               |
-| `25`                                                                                                   | NUMERIC      | not applicable | `number`                                             | `25`                                                                 |
-| "a string text"                                                                                        | STRING       | TEXT           | `string`                                              | `a string text`                                                      |
-| <pre>{<br>  "firefox": {<br>    "name": "Firefox",<br>    "pref_url": "about:config"<br>  }<br>}</pre> | STRING       | JSON           | `JSON object`                              | `{"firefox":{"name":"Firefox","pref_url":"about:config"}}` |
-| <pre>men:<br>  - John Smith<br>  - Bill Jones<br>women:<br>  - Mary Smith<br>  - Susan Williams</pre>  | STRING       | YAML           | `string`                              | `"men:\n  - John Smith\n  - Bill Jones\nwomen:\n  - Mary Smith\n  - Susan Williams"` |
+| **Feature or Property value**                                                                          | **DataType** | **DataFormat** | **Type of data returned <br> by `getCurrentValue()`** | **Example output**                                                                   |
+| ------------------------------------------------------------------------------------------------------ | ------------ | -------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `true`                                                                                                 | BOOLEAN      | not applicable | `boolean`                                             | `true`                                                                               |
+| `25`                                                                                                   | NUMERIC      | not applicable | `number`                                              | `25`                                                                                 |
+| "a string text"                                                                                        | STRING       | TEXT           | `string`                                              | `a string text`                                                                      |
+| <pre>{<br>  "firefox": {<br>    "name": "Firefox",<br>    "pref_url": "about:config"<br>  }<br>}</pre> | STRING       | JSON           | `JSON object`                                         | `{"firefox":{"name":"Firefox","pref_url":"about:config"}}`                           |
+| <pre>men:<br>  - John Smith<br>  - Bill Jones<br>women:<br>  - Mary Smith<br>  - Susan Williams</pre>  | STRING       | YAML           | `string`                                              | `"men:\n  - John Smith\n  - Bill Jones\nwomen:\n  - Mary Smith\n  - Susan Williams"` |
 </details>
 
 <details><summary>Feature flag usage Example</summary>

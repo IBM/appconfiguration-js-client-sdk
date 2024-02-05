@@ -12,8 +12,10 @@
 ## Step 2: Generate Service Credentials
 - Go to dashboard page of App Configuration service instance in the IBM Cloud UI.
 - Navigate to Service Credentials section and generate a new set of *Client SDK* credentials. Provide the generated `region`, `guid` and `apikey` values in [html file](index.html).
+
 ## Step 3: Create a collection, segment, feature flag & add targeting to feature flag
 - On to dashboard page of App Configuration service instance created, navigate to Collections section and create a collection by clicking on create button.
+
     ```
     //Collection details
 
@@ -75,8 +77,9 @@ $ # From the root directory, run
 $ npm install
 $ npm run build
 $
-$ # then cd into the example folder
-$ cd ./example
+$ # start the server by running the below command
+$ python -m http.server
 $
 $ # Open the index.html file in any browser.
+$ http://localhost:8000/example/index.html
 ```

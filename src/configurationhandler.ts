@@ -15,21 +15,20 @@
  */
 
 import { getCacheInstance, setCache } from './models/Cache';
-import { ConfigResponse, instanceOfConfigResponse } from './models/ConfigResponse';
-import Feature from './models/Feature';
-import Property from './models/Property';
+import { SdkConfigResponse } from './models/SdkConfigResponse';
+import Feature, { IFeature } from './models/Feature';
+import Property, { IProperty } from './models/Property';
 import Segment from './models/Segment';
 import { EventSourcePolyfill } from './polyfill/eventsource';
-import { retryableGetConfig } from './utils/apimanager';
 import * as Constants from './utils/constants';
-import { APIError } from './utils/custom-error';
 import Emitter from './utils/events-handler';
 import Metering from './utils/metering';
-import { storage } from './utils/storage';
 import UrlBuilder from './utils/urlbuilder';
+import { Logger } from './utils/logger';
 
 const urlBuilder = UrlBuilder.getInstance();
 const metering = Metering.getInstance();
+const logger = new Logger(Constants.APP_CONFIGURATION);
 
 export default class ConfigurationHandler {
     private static instance: ConfigurationHandler;
@@ -42,10 +41,6 @@ export default class ConfigurationHandler {
 
     private apikey: string | undefined;
 
-    private collectionId: string | undefined;
-
-    private environmentId: string | undefined;
-
     private overrideServiceUrl: string | undefined;
 
     init(region: string, guid: string, apikey: string, overrideServiceUrl: string) {
@@ -56,8 +51,6 @@ export default class ConfigurationHandler {
     }
 
     async setContext(collectionId: string, environmentId: string): Promise<void> {
-        this.collectionId = collectionId;
-        this.environmentId = environmentId;
         urlBuilder.init({
             region: this.region as string,
             guid: this.guid as string,
@@ -67,46 +60,23 @@ export default class ConfigurationHandler {
             environmentId,
         })
         metering.init(collectionId, environmentId);
-        await this.fetchConfigurations();
+        await this.connectEventSource();
     }
 
-    async fetchConfigurations(): Promise<void> {
-        const cacheConfig = storage.get('configdata');
-        try {
-            // load the configurations if exists in the localstorage. But do not emit configuration update event
-            if (cacheConfig && instanceOfConfigResponse(cacheConfig)) {
-                this.saveInCache(cacheConfig);
-            }
-
-            const response: ConfigResponse = await retryableGetConfig();
-            storage.save('configdata', response);
-            this.saveInCache(response);
-            Emitter.emit(Constants.CONFIGURATION_UPDATE_EVENT);
-        } catch (e) {
-            if (e instanceof APIError) {
-                console.error(''.concat(Constants.APP_CONFIGURATION, e.statusCode.toString(), ' ', e.message));
-            } else {
-                console.error(''.concat(Constants.APP_CONFIGURATION, 'Unexpected error: '), e);
-            }
-            // emit error event?
-        }
-        this.connectEventSource();
-    }
-
-    saveInCache(data: ConfigResponse) {
+    saveInCache(data: SdkConfigResponse) {
 
         const _featureMap: { [x: string]: Feature } = {};
-        if (Object.keys(data.features).length) {
-            const { features } = data;
-            features.forEach((feature) => {
+        if (Object.keys(data.environments[0].features).length) {
+            const featuresList: IFeature[] = data.environments[0].features;
+            featuresList.forEach((feature) => {
                 _featureMap[feature.feature_id] = new Feature(feature);
             });
         }
 
         const _propertyMap: { [x: string]: Property } = {};
-        if (Object.keys(data.properties).length) {
-            const { properties } = data;
-            properties.forEach((property) => {
+        if (Object.keys(data.environments[0].properties).length) {
+            const propertiesList: IProperty[] = data.environments[0].properties;
+            propertiesList.forEach((property) => {
                 _propertyMap[property.property_id] = new Property(property);
             });
         }
@@ -121,29 +91,29 @@ export default class ConfigurationHandler {
         setCache(_featureMap, _propertyMap, _segmentMap);
     }
 
-    connectEventSource() {
+    connectEventSource(): Promise<void> {
         const url = urlBuilder.getEventSourceUrl();
         const headers = urlBuilder.getEventSourceHeaders();
         const source = new EventSourcePolyfill(url, headers);
 
-        source.addEventListener('error', () => { });
+        source.addEventListener<'SSEConfig_payload'>('SSEConfig_payload', (event) => {
+            const eventData: SdkConfigResponse = JSON.parse(event.data);
+            logger.log("Update event received.");
+            this.saveInCache(eventData);
+            Emitter.emit(Constants.CONFIGURATION_UPDATE_EVENT);
+        });
 
-        source.addEventListener('Registration', () => { });
+        return new Promise<void>((resolve, reject) => {
+            source.addEventListener('error', (err) => {
+                reject(err)
+            });
 
-        source.addEventListener('SSEEvent_update', async () => {
-            try {
-                const response: ConfigResponse = await retryableGetConfig();
-                storage.save('configdata', response)
-                this.saveInCache(response);
-                Emitter.emit(Constants.CONFIGURATION_UPDATE_EVENT);
-            } catch (e) {
-                if (e instanceof APIError) {
-                    console.error(''.concat(Constants.APP_CONFIGURATION, e.statusCode.toString(), ' ', e.message));
-                } else {
-                    console.error(''.concat(Constants.APP_CONFIGURATION, 'Unexpected error: '), e);
-                }
-                // emit error event?
-            }
+            source.addEventListener<'Registration'>('Registration', (event) => {
+                const eventData: SdkConfigResponse = JSON.parse(event.data);
+                logger.log("Client registration complete.");
+                this.saveInCache(eventData);
+                resolve();
+            });
         });
     }
 

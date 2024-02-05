@@ -17,7 +17,6 @@
 import { version } from '../../package.json';
 import { EventSourcePolyfillInit } from '../polyfill/eventsource';
 import * as Constants from './constants';
-import { storage } from './storage';
 
 interface UrlBuilderOptions {
     region: string;
@@ -41,8 +40,6 @@ export default class UrlBuilder {
 
     private environmentId: string | undefined;
 
-    private clientId: string | undefined;
-
     private overrideServiceUrl: string | undefined;
 
     private constructor() { /* singleton design pattern */ }
@@ -53,20 +50,7 @@ export default class UrlBuilder {
         this.apikey = options.apikey;
         this.collectionId = options.collectionId;
         this.environmentId = options.environmentId;
-        this.clientId = this.resolveClientId();
         this.overrideServiceUrl = options.overrideServiceUrl;
-    }
-
-    resolveClientId(): string {
-        if (this.clientId) {
-            return this.clientId;
-        }
-        let clientId = storage.get('clientId');
-        if (!clientId) {
-            clientId = Date.now().toString();
-            storage.save('clientId', clientId);
-        }
-        return clientId;
     }
 
     getAPICallHeaders(isPost = false) {
@@ -96,16 +80,12 @@ export default class UrlBuilder {
         return ''.concat('https://', this.region as string, '.apprapp.cloud.ibm.com');
     }
 
-    getConfigUrl(): string {
-        return ''.concat(this.getBaseServiceUrl(), '/apprapp/feature/v1/instances/', this.guid as string, '/collections/', this.collectionId as string, '/config?environment_id=', this.environmentId as string);
-    }
-
     getMeteringUrl(): string {
         return ''.concat(this.getBaseServiceUrl(), '/apprapp/events/v1/instances/', this.guid as string, '/usage');
     }
 
     getEventSourceUrl(): string {
-        return ''.concat(this.getBaseServiceUrl(), '/apprapp/feature/v1/instances/', this.guid as string, '/environments/', this.environmentId as string, '/sse/subscribe?collection_id=', this.collectionId as string, '&sse_client_id=', this.clientId as string)
+        return ''.concat(this.getBaseServiceUrl(), '/apprapp/feature/v1/instances/', this.guid as string, '/environments/', this.environmentId as string, '/sse/subscribe?collection_id=', this.collectionId as string)
     }
 
     public static getInstance() {
