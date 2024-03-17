@@ -90,6 +90,7 @@ where,
     - `eu-gb` for London
     - `au-syd` for Sydney
     - `us-east` for Washington DC
+    - `eu-de` for Frankfurt
 - **guid** : Instance ID of the App Configuration service. Obtain it from the service credentials section of the App Configuration dashboard.
 - **apikey** : ApiKey of the App Configuration service. Obtain it from the service credentials section of the App Configuration dashboard.
 - **collectionId**: ID of the collection created in App Configuration service instance under the **Collections** section.

@@ -207,4 +207,6 @@ export default class AppConfiguration {
     public static REGION_AU_SYD = 'au-syd';
 
     public static REGION_US_EAST = 'us-east';
+
+    public static REGION_EU_DE = 'eu-de';
 }
