@@ -112,6 +112,7 @@ export default class ConfigurationHandler {
                 const eventData: SdkConfigResponse = JSON.parse(event.data);
                 logger.log("Client registration complete.");
                 this.saveInCache(eventData);
+                Emitter.emit(Constants.REGISTRATION_EVENT);
                 resolve();
             });
         });
