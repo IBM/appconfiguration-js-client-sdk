@@ -26,4 +26,5 @@ export const MAX_HASH_VALUE = 2 ** 32;
 export const NORMALIZER = 100;
 export const EVENT_SOURCE_HEARTBEAT_TIMEOUT = 6 * 3600 * 1000; // 6 hours
 export const CONFIGURATION_UPDATE_EVENT = 'configurationUpdate';
+export const REGISTRATION_EVENT = 'registration';
 export const INVALID_ENTITY_ID = 'Invalid entityId passed to';
