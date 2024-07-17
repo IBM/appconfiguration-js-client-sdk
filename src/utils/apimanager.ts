@@ -15,6 +15,8 @@
  */
 import * as Constants from './constants';
 import { APIError } from './custom-error';
+import { EvaluationEvent } from './expevaluationmetering';
+import { MetricEvent } from './expmetricmetering';
 import { MeteringRequestBody } from './metering';
 import UrlBuilder from './urlbuilder';
 
@@ -46,6 +48,56 @@ export async function retryablePostMetering(
         if ((response.status >= 500 && response.status <= 599) || response.status === 429) {
             if (retries > 1) {
                 return retryablePostMetering(data, keepalive, retries - 1);
+            }
+        }
+        throw new APIError(await response.text(), response.status);
+    });
+}
+
+export async function retryablePostExpEvaluationEvents(
+    data: EvaluationEvent,
+    keepalive: boolean,
+    retries: number = Constants.NUMBER_OF_RETRIES
+): Promise<void> {
+    const url = urlBuilder.getExperimentAnalyticsUrl();
+    const params: RequestInit = {
+        method: 'POST',
+        headers: urlBuilder.getAPICallHeaders(true),
+        body: JSON.stringify(data),
+    };
+    if (keepalive) params.keepalive = true;
+    return fetch(url, params).then(async (response) => {
+        if (response.ok) {
+            return;
+        }
+        if ((response.status >= 500 && response.status <= 599) || response.status === 429) {
+            if (retries > 1) {
+                return retryablePostExpEvaluationEvents(data, keepalive, retries - 1);
+            }
+        }
+        throw new APIError(await response.text(), response.status);
+    });
+}
+
+export async function retryablePostExpMetricEvents(
+    data: MetricEvent,
+    keepalive: boolean,
+    retries: number = Constants.NUMBER_OF_RETRIES
+): Promise<void> {
+    const url = urlBuilder.getExperimentAnalyticsUrl();
+    const params: RequestInit = {
+        method: 'POST',
+        headers: urlBuilder.getAPICallHeaders(true),
+        body: JSON.stringify(data),
+    };
+    if (keepalive) params.keepalive = true;
+    return fetch(url, params).then(async (response) => {
+        if (response.ok) {
+            return;
+        }
+        if ((response.status >= 500 && response.status <= 599) || response.status === 429) {
+            if (retries > 1) {
+                return retryablePostExpMetricEvents(data, keepalive, retries - 1);
             }
         }
         throw new APIError(await response.text(), response.status);

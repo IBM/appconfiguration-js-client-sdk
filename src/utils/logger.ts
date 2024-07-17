@@ -14,16 +14,62 @@
  * limitations under the License.
  */
 
-export class Logger {
+import * as Constants from './constants';
 
-    private logPrefix: string;
+export type LogLevel = 'debug' | 'info' | 'warning' | 'error';
 
-    constructor(prefix: string) {
-        this.logPrefix = prefix;
+interface LoggerConfig {
+    level: LogLevel;
+}
+
+const defaultConfig: LoggerConfig = {
+    level: 'info',
+};
+
+let loggerConfig: LoggerConfig = { ...defaultConfig };
+
+export const setLoggerConfig = (config: Partial<LoggerConfig>) => {
+    loggerConfig = { ...loggerConfig, ...config };
+};
+
+const getLoggerConfig = (): LoggerConfig => loggerConfig;
+
+class Logger {
+    private static instance: Logger;
+
+    private constructor() { /* singleton design pattern */ }
+
+    static getInstance(): Logger {
+        if (!Logger.instance) {
+            Logger.instance = new Logger();
+        }
+        return Logger.instance;
     }
 
-    log(message: string): void {
-        const formattedMessage = `${this.logPrefix}${message}`;
-        console.log(formattedMessage);
+    private log(level: LogLevel, ...messages: any[]) {
+        const config = getLoggerConfig();
+        const levels: LogLevel[] = ['debug', 'info', 'warning', 'error'];
+
+        if (levels.indexOf(level) >= levels.indexOf(config.level)) {
+            console.log(`${Constants.APP_CONFIGURATION}[${level.toUpperCase()}]`, ...messages);
+        }
+    }
+
+    debug(...messages: any[]) {
+        this.log('debug', ...messages);
+    }
+
+    info(...messages: any[]) {
+        this.log('info', ...messages);
+    }
+
+    warning(...messages: any[]) {
+        this.log('warning', ...messages);
+    }
+
+    error(...messages: any[]) {
+        this.log('error', ...messages);
     }
 }
+
+export const logger = Logger.getInstance();

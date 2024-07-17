@@ -84,6 +84,10 @@ export default class UrlBuilder {
         return ''.concat(this.getBaseServiceUrl(), '/apprapp/events/v1/instances/', this.guid as string, '/usage');
     }
 
+    getExperimentAnalyticsUrl(): string {
+        return ''.concat(this.getBaseServiceUrl(), '/apprapp/metrics/v1/instances/', this.guid as string, '/analytics');
+    }
+
     getEventSourceUrl(): string {
         return ''.concat(this.getBaseServiceUrl(), '/apprapp/feature/v1/instances/', this.guid as string, '/environments/', this.environmentId as string, '/sse/subscribe?collection_id=', this.collectionId as string)
     }

@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
-import { ISegment } from './Segment';
-import { IEnvironment } from './Environment';
+import { IFeature } from './Feature';
+import { IProperty } from './Property';
 
-export interface SdkConfigResponse {
-    environments: IEnvironment[];
-    segments: ISegment[];
+export interface IEnvironment {
+    name: string;
+    environment_id: string;
+    features: IFeature[];
+    properties: IProperty[];
 }
