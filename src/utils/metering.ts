@@ -17,6 +17,7 @@
 import { retryablePostMetering } from './apimanager';
 import * as Constants from './constants';
 import { APIError } from './custom-error';
+import { logger } from './logger';
 
 interface Usage {
     [key: string]: string | number | null;
@@ -144,10 +145,10 @@ export default class Metering {
                         this.sendToServer(data, keepalive);
                     }, this.meteringInterval)
                 } else {
-                    console.error('Unexpected error: ', e);
+                    logger.error('Unexpected error: ', e);
                 }
             } else {
-                console.error('Unexpected error: ', e);
+                logger.error('Unexpected error: ', e);
             }
         }
     }
@@ -202,7 +203,7 @@ export default class Metering {
                 }
             });
         } catch (e) {
-            console.error(e);
+            logger.error(e);
         }
 
     }

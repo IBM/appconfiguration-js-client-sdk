@@ -19,9 +19,9 @@ import { getNormalizedValue } from '../utils/hashing';
 import Metering from '../utils/metering';
 import { getCacheInstance } from './Cache';
 import FeatureSegmentRule, { IFeatureSegmentRule } from './FeatureSegmentRule';
-import { Logger } from '../utils/logger';
-
-const logger = new Logger(Constants.APP_CONFIGURATION);
+import { logger } from '../utils/logger';
+import { IExperiment } from './Experiment';
+import ExpEvalMetering from '../utils/expevaluationmetering';
 
 export interface IFeature {
     name: string;
@@ -33,12 +33,22 @@ export interface IFeature {
     segment_rules: IFeatureSegmentRule[];
     enabled: boolean;
     rollout_percentage?: number;
+    experiment?: IExperiment;
 }
 
 interface EvaluationResult {
     evaluated_segment_id: string;
     value: any;
     is_enabled: boolean;
+    variation_id: string;
+    audience_group: string;
+}
+
+// variation details with audience type (experiment or control)
+interface VariationWithAudience {
+    variation_id: string;
+    rollout_percentage: number;
+    audience_group: string;
 }
 
 export default class Feature {
@@ -60,6 +70,8 @@ export default class Feature {
 
     private rollout_percentage: number;
 
+    public experiment: IExperiment | undefined; // todo: keep it private
+
     constructor({
         name,
         feature_id,
@@ -70,6 +82,7 @@ export default class Feature {
         segment_rules,
         enabled,
         rollout_percentage = 100,
+        experiment = undefined,
     }: IFeature) {
         this.name = name;
         this.feature_id = feature_id;
@@ -81,6 +94,7 @@ export default class Feature {
         this.rollout_percentage = rollout_percentage;
         this.segment_rules = [];
         for (const element of segment_rules) this.segment_rules.push(new FeatureSegmentRule(element));
+        this.experiment = experiment;
     }
 
     /**
@@ -158,7 +172,7 @@ export default class Feature {
      */
     public getCurrentValue(entityId: string, entityAttributes: { [x: string]: any; } = {}): any {
         if (!entityId) {
-            logger.log(''.concat('Feature flag evaluation: ', Constants.INVALID_ENTITY_ID, ' getCurrentValue'));
+            logger.error(''.concat('Feature flag evaluation: ', Constants.INVALID_ENTITY_ID, ' getCurrentValue'));
             return null;
         }
 
@@ -169,11 +183,195 @@ export default class Feature {
         let evaluationResult: EvaluationResult = {
             evaluated_segment_id: Constants.DEFAULT_SEGMENT_ID,
             value: undefined,
-            is_enabled: false
+            is_enabled: false,
+            variation_id: '',
+            audience_group: '',
         };
         try {
             // evaluate the feature flag only if the toggle state is enabled
             if (this.enabled) {
+                if (this.experiment && this.experiment.experiment_status === 'RUNNING') {
+                    // experiment is running
+                    const trafficDistribution = this.experiment.traffic_distribution_json;
+                    const { iteration } = this.experiment;
+                    const { variations } = this.experiment;
+                    if (trafficDistribution.type === 'ALL') {
+                        const allVariations: VariationWithAudience[] = [];
+                        for (const expV of trafficDistribution.experimental_group) {
+                            allVariations.push({ variation_id: expV.variation_id, rollout_percentage: expV.rollout_percentage, audience_group: 'experiment' });
+                        }
+                        allVariations.push({ variation_id: trafficDistribution.control_group.variation_id, rollout_percentage: trafficDistribution.control_group.rollout_percentage, audience_group: 'control' });
+                        let variationId = '';
+                        let totalPercentage = 0;
+                        let audienceGroup = '';
+                        const hashValue = getNormalizedValue(''.concat(entityId, ':', this.feature_id, ':', iteration.iteration_key));
+                        for (const v of allVariations) {
+                            audienceGroup = v.audience_group;
+                            variationId = v.variation_id;
+                            totalPercentage += v.rollout_percentage;
+                            if (hashValue < totalPercentage) {
+                                break;
+                            }
+                        }
+                        for (const v of variations) {
+                            if (variationId === v.variation_id) {
+                                evaluationResult.audience_group = audienceGroup;
+                                evaluationResult.variation_id = v.variation_id
+                                return { current_value: v.variation_value };
+                            }
+                        }
+                        logger.error('no variation was found to serve');
+                        return { current_value: evaluationResult.value }
+                    }
+                    if (trafficDistribution.type === 'DEFAULT_RULE') {
+                        evaluationResult.evaluated_segment_id = Constants.DEFAULT_SEGMENT_ID;
+                        if (this.segment_rules.length > 0 && Object.keys(entityAttributes).length > 0) {
+                            const rulesMap = this.parseRules(this.segment_rules);
+                            // for each rules in the targeting
+                            for (let index = 1; index <= Object.keys(rulesMap).length; index += 1) {
+                                const segmentRule = rulesMap[index];
+                                if (segmentRule.rules.length > 0) {
+                                    for (const level of segmentRule.rules) {
+                                        const { segments } = level;
+                                        if (segments.length > 0) {
+                                            // for each segment in a rule
+                                            for (const innerLevel of segments) {
+                                                const segmentId: string = innerLevel
+                                                // check whether the entityAttributes satifies all the rules of that segment
+                                                if (this.evaluateSegment(segmentId, entityAttributes)) {
+                                                    evaluationResult.evaluated_segment_id = segmentId;
+                                                    const segmentLevelRolloutPercentage = segmentRule.rollout_percentage === Constants.DEFAULT_ROLLOUT_PERCENTAGE ? this.rollout_percentage : segmentRule.rollout_percentage as number;
+                                                    // check whether the entityId is eligible for segment rollout
+                                                    if (segmentLevelRolloutPercentage === 100 || (getNormalizedValue(''.concat(entityId, ':', this.feature_id)) < segmentLevelRolloutPercentage)) {
+                                                        // since the entityId is eligible for segment rollout the return value should be either of inherited or overridden value
+                                                        if (segmentRule.value === Constants.DEFAULT_FEATURE_VALUE) {
+                                                            evaluationResult.value = this.enabled_value; // return the inherited value
+                                                        } else {
+                                                            evaluationResult.value = segmentRule.value; // return the overridden value
+                                                        }
+                                                        evaluationResult.is_enabled = true;
+                                                    } else {
+                                                        evaluationResult.value = this.disabled_value;
+                                                        evaluationResult.is_enabled = false;
+                                                    }
+                                                    return { current_value: evaluationResult.value, is_enabled: evaluationResult.is_enabled };
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // case 1: user doesn't belong to any of the rules
+                        // case 2: feature flag is not targeted with rules
+                        // case 3: feature flag is targeted with rules, but entityAttributes are not passed
+                        const allVariations: VariationWithAudience[] = [];
+                        for (const expV of trafficDistribution.experimental_group) {
+                            allVariations.push({ variation_id: expV.variation_id, rollout_percentage: expV.rollout_percentage, audience_group: 'experiment' });
+                        }
+                        allVariations.push({ variation_id: trafficDistribution.control_group.variation_id, rollout_percentage: trafficDistribution.control_group.rollout_percentage, audience_group: 'control' });
+                        let variationId = '';
+                        let totalPercentage = 0;
+                        let audienceGroup = '';
+                        const hashValue = getNormalizedValue(''.concat(entityId, ':', this.feature_id, ':', iteration.iteration_key));
+                        for (const v of allVariations) {
+                            audienceGroup = v.audience_group;
+                            variationId = v.variation_id;
+                            totalPercentage += v.rollout_percentage;
+                            if (hashValue < totalPercentage) {
+                                break;
+                            }
+                        }
+                        for (const v of variations) {
+                            if (variationId === v.variation_id) {
+                                evaluationResult.audience_group = audienceGroup;
+                                evaluationResult.variation_id = v.variation_id
+                                return { current_value: v.variation_value };
+                            }
+                        }
+                        logger.error('no variation was found to serve');
+                        return { current_value: evaluationResult.value }
+                    }
+                    if (trafficDistribution.type === 'RULE') {
+                        evaluationResult.evaluated_segment_id = Constants.DEFAULT_SEGMENT_ID;
+                        if (this.segment_rules.length > 0 && Object.keys(entityAttributes).length > 0) {
+                            const rulesMap = this.parseRules(this.segment_rules);
+                            // for each rules in the targeting
+                            for (let index = 1; index <= Object.keys(rulesMap).length; index += 1) {
+                                const segmentRule = rulesMap[index];
+                                if (segmentRule.rules.length > 0) {
+                                    for (const level of segmentRule.rules) {
+                                        const { segments } = level;
+                                        if (segments.length > 0) {
+                                            // for each segment in a rule
+                                            for (const innerLevel of segments) {
+                                                const segmentId: string = innerLevel
+                                                // check whether the entityAttributes satifies all the rules of that segment
+                                                if (this.evaluateSegment(segmentId, entityAttributes)) {
+                                                    evaluationResult.evaluated_segment_id = segmentId;
+                                                    const expRuleId = parseInt(trafficDistribution.rule_id.split('-')[1])
+                                                    if (expRuleId === segmentRule.order) {
+                                                        const allVariations: VariationWithAudience[] = [];
+                                                        for (const expV of trafficDistribution.experimental_group) {
+                                                            allVariations.push({ variation_id: expV.variation_id, rollout_percentage: expV.rollout_percentage, audience_group: 'experiment' });
+                                                        }
+                                                        allVariations.push({ variation_id: trafficDistribution.control_group.variation_id, rollout_percentage: trafficDistribution.control_group.rollout_percentage, audience_group: 'control' });
+                                                        let variationId = '';
+                                                        let totalPercentage = 0;
+                                                        let audienceGroup = '';
+                                                        const hashValue = getNormalizedValue(''.concat(entityId, ':', this.feature_id, ':', iteration.iteration_key));
+                                                        for (const v of allVariations) {
+                                                            audienceGroup = v.audience_group;
+                                                            variationId = v.variation_id;
+                                                            totalPercentage += v.rollout_percentage;
+                                                            if (hashValue < totalPercentage) {
+                                                                break;
+                                                            }
+                                                        }
+                                                        for (const v of variations) {
+                                                            if (variationId === v.variation_id) {
+                                                                evaluationResult.audience_group = audienceGroup;
+                                                                evaluationResult.variation_id = v.variation_id
+                                                                return { current_value: v.variation_value };
+                                                            }
+                                                        }
+                                                        logger.error('no variation was found to serve');
+                                                        return { current_value: evaluationResult.value }
+                                                    }
+                                                    const segmentLevelRolloutPercentage = segmentRule.rollout_percentage === Constants.DEFAULT_ROLLOUT_PERCENTAGE ? this.rollout_percentage : segmentRule.rollout_percentage as number;
+                                                    // check whether the entityId is eligible for segment rollout
+                                                    if (segmentLevelRolloutPercentage === 100 || (getNormalizedValue(''.concat(entityId, ':', this.feature_id)) < segmentLevelRolloutPercentage)) {
+                                                        // since the entityId is eligible for segment rollout the return value should be either of inherited or overridden value
+                                                        if (segmentRule.value === Constants.DEFAULT_FEATURE_VALUE) {
+                                                            evaluationResult.value = this.enabled_value; // return the inherited value
+                                                        } else {
+                                                            evaluationResult.value = segmentRule.value; // return the overridden value
+                                                        }
+                                                        evaluationResult.is_enabled = true;
+                                                    } else {
+                                                        evaluationResult.value = this.disabled_value;
+                                                        evaluationResult.is_enabled = false;
+                                                    }
+                                                    return { current_value: evaluationResult.value, is_enabled: evaluationResult.is_enabled };
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // case 1: user doesn't belong to any of the rules
+                        // case 2: feature flag is targeted with rules, but entityAttributes are not passed
+                        // use the entityId and check whether the entityId is eligible for the default rollout
+                        if (this.rollout_percentage === 100 || (getNormalizedValue(''.concat(entityId, ':', this.feature_id)) < this.rollout_percentage)) {
+                            return { current_value: this.enabled_value, is_enabled: true };
+                        }
+                        return { current_value: this.disabled_value, is_enabled: false };
+                    }
+                    logger.error('invalid type in traffic distribution', trafficDistribution.type);
+                    return { current_value: evaluationResult.value }
+                }
+                // experiment is not running
                 // check whether the feature flag is configured with any targeting definition and then check whether the user has passed an valid entityAttributes JSON before we evaluate
                 if (this.segment_rules.length > 0 && Object.keys(entityAttributes).length > 0) {
                     const rulesMap = this.parseRules(this.segment_rules);
@@ -188,7 +386,11 @@ export default class Feature {
             }
             return { current_value: this.disabled_value, is_enabled: false };
         } finally {
-            Metering.getInstance().addMetering(entityId, evaluationResult.evaluated_segment_id, this.feature_id, null);
+            if (this.experiment && this.experiment.experiment_status === 'RUNNING' && evaluationResult.variation_id.length > 0) {
+                ExpEvalMetering.getInstance().addMetering({ experiment_id: this.experiment.experiment_id, iteration_id: this.experiment?.iteration.iteration_id, feature_id: this.feature_id, variation_id: evaluationResult.variation_id, entity_id: entityId, audience_group: evaluationResult.audience_group, })
+            } else {
+                Metering.getInstance().addMetering(entityId, evaluationResult.evaluated_segment_id, this.feature_id, null);
+            }
         }
     }
 
@@ -204,7 +406,9 @@ export default class Feature {
         const resultDict: EvaluationResult = {
             evaluated_segment_id: Constants.DEFAULT_SEGMENT_ID,
             value: undefined,
-            is_enabled: false
+            is_enabled: false,
+            variation_id: '',
+            audience_group: ''
         };
 
         try {

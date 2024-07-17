@@ -24,11 +24,14 @@ import * as Constants from './utils/constants';
 import Emitter from './utils/events-handler';
 import Metering from './utils/metering';
 import UrlBuilder from './utils/urlbuilder';
-import { Logger } from './utils/logger';
+import { logger } from './utils/logger';
+import ExpMetricMetering from './utils/expmetricmetering';
+import ExpEvalMetering from './utils/expevaluationmetering';
 
 const urlBuilder = UrlBuilder.getInstance();
 const metering = Metering.getInstance();
-const logger = new Logger(Constants.APP_CONFIGURATION);
+const evaluationEvents = ExpEvalMetering.getInstance();
+const metricEvents = ExpMetricMetering.getInstance();
 
 export default class ConfigurationHandler {
     private static instance: ConfigurationHandler;
@@ -60,7 +63,17 @@ export default class ConfigurationHandler {
             environmentId,
         })
         metering.init(collectionId, environmentId);
+        evaluationEvents.init(environmentId);
+        metricEvents.init(environmentId);
         await this.connectEventSource();
+    }
+
+    track(eventKey: string, entityId: string) {
+        if (eventKey?.length > 0 && entityId?.length > 0) {
+            ExpMetricMetering.getInstance().addMetering(eventKey, entityId);
+            return
+        }
+        logger.error('eventKey or entityId cannot be empty');
     }
 
     saveInCache(data: SdkConfigResponse) {
@@ -98,7 +111,7 @@ export default class ConfigurationHandler {
 
         source.addEventListener<'SSEConfig_payload'>('SSEConfig_payload', (event) => {
             const eventData: SdkConfigResponse = JSON.parse(event.data);
-            logger.log("Update event received.");
+            logger.info("Update event received.");
             this.saveInCache(eventData);
             Emitter.emit(Constants.CONFIGURATION_UPDATE_EVENT);
         });
@@ -110,7 +123,7 @@ export default class ConfigurationHandler {
 
             source.addEventListener<'Registration'>('Registration', (event) => {
                 const eventData: SdkConfigResponse = JSON.parse(event.data);
-                logger.log("Client registration complete.");
+                logger.info("Client registration complete.");
                 this.saveInCache(eventData);
                 Emitter.emit(Constants.REGISTRATION_EVENT);
                 resolve();

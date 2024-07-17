@@ -15,7 +15,7 @@
  */
 
 import { ISegment } from './Segment';
-import { IEnvironment } from './Environments';
+import { IEnvironment } from './Environment';
 
 export interface SdkConfigResponse {
     environments: IEnvironment[];

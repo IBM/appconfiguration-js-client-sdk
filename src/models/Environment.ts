@@ -19,10 +19,7 @@ import { IProperty } from './Property';
 
 export interface IEnvironment {
     name: string;
-    environmentId: string;
-    description?: string;
-    tags?: string;
-    colorCode?: string;
+    environment_id: string;
     features: IFeature[];
     properties: IProperty[];
 }

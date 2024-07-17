@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-export const APP_CONFIGURATION = 'App Configuration: ';
+export const APP_CONFIGURATION = 'AppConfiguration: ';
 export const DEFAULT_ENTITY_ID = '$$null$$';
 export const DEFAULT_SEGMENT_ID = '$$null$$';
 export const DEFAULT_FEATURE_VALUE = '$default';

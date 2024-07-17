@@ -20,6 +20,7 @@ import Property from './models/Property';
 import { fetchAvailable } from './utils/apimanager';
 import * as Constants from './utils/constants';
 import Emitter from './utils/events-handler';
+import { LogLevel, setLoggerConfig } from './utils/logger';
 import Metering from './utils/metering';
 
 const configurationHandlerInstance = ConfigurationHandler.getInstance();
@@ -32,6 +33,8 @@ export default class AppConfiguration {
     private isInitialized = false;
 
     private isInitializedContext = false;
+
+    private logLevel = 'info';  // Default level
 
     private constructor() {
         if (!fetchAvailable()) {
@@ -166,6 +169,31 @@ export default class AppConfiguration {
      * @memberof AppConfiguration
      */
     emitter = Emitter;
+
+    /**
+     * Set the logging level to one of 'debug' | 'info' | 'warning' | 'error';
+     * @param {string} level
+     * @memberof AppConfiguration
+     */
+    setLogLevel(level: string): void {
+        if (level && ['debug', 'info', 'warning', 'error'].includes(level)) {
+            setLoggerConfig({ level: level as LogLevel });
+        } else {
+            setLoggerConfig({ level: this.logLevel as LogLevel });
+        }
+    }
+
+    /**
+     * Method to record the user engagement while running an experiment.
+     * @param {string} eventKey - SDK event key
+     * @param {string} entityId - The entityId
+     */
+    track(eventKey: string, entityId: string): void {
+        if (this.isInitialized && this.isInitializedContext) {
+            return configurationHandlerInstance.track(eventKey, entityId);
+        }
+        throw new Error(''.concat(Constants.APP_CONFIGURATION, 'track: SDK not initialised.'));
+    }
 
     /**
      * @internal
