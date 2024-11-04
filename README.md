@@ -1,3 +1,7 @@
+### :warning: Important Security Notice
+
+> To enhance the security of your applications using the `ibm-appconfiguration-js-client-sdk`, it is strongly recommended to use an **encrypted APIKey** instead of the plain APIKey in the init method. This change is vital to prevent exposure of sensitive credentials when users inspect your web application. If you are already using a plain APIKey, please update your application to generate and use the encrypted APIKey as per the steps mentioned [here](./README_APIKEY_ENCRYPTION.md).
+
 # IBM App Configuration JavaScript Client SDK
 IBM Cloud App Configuration JavaScript Client SDK is used to perform feature flag and property evaluation in web applications and track custom metrics for Experimentation based on the configuration on IBM Cloud App Configuration service.
 
@@ -42,7 +46,7 @@ Initialize the sdk to connect with your App Configuration service instance.
 ```JS
 const region = AppConfiguration.REGION_US_SOUTH;
 const guid = '<guid>';
-const apikey = '<apikey>';
+const apikey = '<encrypted_apikey>';
 
 const collectionId = 'airlines-webapp';
 const environmentId = 'dev';
@@ -91,13 +95,14 @@ where,
     - `us-east` for Washington DC
     - `eu-de` for Frankfurt
 - **guid** : Instance ID of the App Configuration service. Obtain it from the service credentials section of the App Configuration dashboard.
-- **apikey** : ApiKey of the App Configuration service. Obtain it from the service credentials section of the App Configuration dashboard.
+- **apikey** : The encrypted APIKey generated as described [here](./README_APIKEY_ENCRYPTION.md).
 - **collectionId**: ID of the collection created in App Configuration service instance under the **Collections** section.
 - **environmentId**: ID of the environment created in App Configuration service instance under the **Environments** section.
 
 :red_circle: **Important** :red_circle:
 
-Ensure to create the service credentials of the role **`Client SDK`** for using with the JavaScript SDK. API key of the **`Client SDK`** role has minimal access permissions that are suitable to use in browser based applications.
+Always use the encrypted APIKey to avoid exposing sensitive information.<br>
+Ensure that you create the service credentials with the **`Client SDK`** role, as it has the minimal access permissions that are suitable to use in browser-based applications.
 
 ## Get single feature
 
