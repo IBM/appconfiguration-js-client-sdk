@@ -237,4 +237,10 @@ export default class AppConfiguration {
     public static REGION_US_EAST = 'us-east';
 
     public static REGION_EU_DE = 'eu-de';
+
+    public static REGION_CA_TOR = 'ca-tor';
+
+    public static REGION_JP_TOK = 'jp-tok';
+
+    public static REGION_JP_OSA = 'jp-osa';
 }

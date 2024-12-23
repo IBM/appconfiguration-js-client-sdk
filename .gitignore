@@ -2,3 +2,4 @@ node_modules/
 dist/
 /typedoc
 .DS_Store
+.idea
