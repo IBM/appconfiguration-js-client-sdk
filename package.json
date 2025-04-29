@@ -1,6 +1,6 @@
 {
   "name": "ibm-appconfiguration-js-client-sdk",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "IBM Cloud App Configuration JavaScript Client SDK",
   "keywords": [
     "client-sdk",
@@ -47,7 +47,7 @@
     "eslint-plugin-prettier": "^4.0.0",
     "jest": "^28.1.1",
     "prettier": "^2.6.2",
-    "ts-jest": "^28.0.5",
+    "ts-jest": "^28.0.8",
     "ts-loader": "^9.3.0",
     "typedoc": "^0.23.5",
     "typescript": "^4.7.3",
