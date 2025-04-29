@@ -89,14 +89,7 @@ console.log(result);
 
 where, 
 - **region** : Region name where the App Configuration service instance is created.
-    - `AppConfiguration.REGION_US_SOUTH` for Dallas
-    - `AppConfiguration.REGION_EU_GB` for London
-    - `AppConfiguration.REGION_AU_SYD` for Sydney
-    - `AppConfiguration.REGION_US_EAST` for Washington DC
-    - `AppConfiguration.REGION_EU_DE` for Frankfurt
-    - `AppConfiguration.REGION_CA_TOR` for Toronto
-    - `AppConfiguration.REGION_JP_TOK` for Tokyo
-    - `AppConfiguration.REGION_JP_OSA` for Osaka
+  See list of supported locations [here](https://cloud.ibm.com/catalog/services/app-configuration). Eg:- `us-south`, `au-syd` etc.
 - **guid** : Instance ID of the App Configuration service. Obtain it from the service credentials section of the App Configuration dashboard.
 - **apikey** : The encrypted APIKey generated as described [here](./README_APIKEY_ENCRYPTION.md).
 - **collectionId**: ID of the collection created in App Configuration service instance under the **Collections** section.
