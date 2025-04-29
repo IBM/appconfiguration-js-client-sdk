@@ -48,18 +48,36 @@ export default class Rule {
                 reg = new RegExp(`${value}$`, 'i');
                 result = reg.test(key);
                 break;
+            case 'notEndsWith':
+                reg = new RegExp(`${value}$`, 'i');
+                result = !reg.test(key);
+                break;
             case 'startsWith':
                 reg = new RegExp(`^${value}`, 'i');
                 result = reg.test(key);
                 break;
+            case 'notStartsWith':
+                reg = new RegExp(`^${value}`, 'i');
+                result = !reg.test(key);
+                break;
             case 'contains':
                 result = key.includes(value);
+                break;
+            case 'notContains':
+                result = !key.includes(value);
                 break;
             case 'is':
                 if (typeof (key) === 'number') {
                     result = (key === parseFloat(value));
                 } else {
                     result = (key.toString() === value.toString());
+                }
+                break;
+            case 'isNot':
+                if (typeof (key) === 'number') {
+                    result = (key !== parseFloat(value));
+                } else {
+                    result = (key.toString() !== value.toString());
                 }
                 break;
             case 'greaterThan':
@@ -90,10 +108,20 @@ export default class Rule {
         } else {
             return result;
         }
-        for (const i of this.values) {
-            const value = i;
-            if (this.operatorCheck(key, value)) {
-                result = true;
+        if(['isNot', 'notContains', 'notStartsWith', 'notEndsWith'].includes(this.operator)) {
+            result = true;
+            for (let index = 0; index < this.values.length; index += 1) {
+                const value = this.values[index];
+                if (!this.operatorCheck(key, value)) {
+                    result = false;
+                }
+            }
+        } else {
+            for (let index = 0; index < this.values.length; index += 1) {
+                const value = this.values[index];
+                if (this.operatorCheck(key, value)) {
+                    result = true;
+                }
             }
         }
         return result;
