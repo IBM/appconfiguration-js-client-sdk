@@ -192,7 +192,7 @@ export default class Feature {
             if (this.enabled) {
                 if (this.experiment && this.experiment.experiment_status === 'RUNNING') {
                     // experiment is running
-                    const trafficDistribution = this.experiment.traffic_distribution_json;
+                    const trafficDistribution = this.experiment.traffic_distribution;
                     const { iteration } = this.experiment;
                     const { variations } = this.experiment;
                     if (trafficDistribution.type === 'ALL') {
@@ -223,7 +223,7 @@ export default class Feature {
                         logger.error('no variation was found to serve');
                         return { current_value: evaluationResult.value }
                     }
-                    if (trafficDistribution.type === 'DEFAULT_RULE') {
+                    if (trafficDistribution.type === 'NO_RULE') {
                         evaluationResult.evaluated_segment_id = Constants.DEFAULT_SEGMENT_ID;
                         if (this.segment_rules.length > 0 && Object.keys(entityAttributes).length > 0) {
                             const rulesMap = this.parseRules(this.segment_rules);
@@ -309,7 +309,7 @@ export default class Feature {
                                                 // check whether the entityAttributes satifies all the rules of that segment
                                                 if (this.evaluateSegment(segmentId, entityAttributes)) {
                                                     evaluationResult.evaluated_segment_id = segmentId;
-                                                    const expRuleId = parseInt(trafficDistribution.rule_id.split('-')[1])
+                                                    const expRuleId = parseInt(trafficDistribution.rule_id)
                                                     if (expRuleId === segmentRule.order) {
                                                         const allVariations: VariationWithAudience[] = [];
                                                         for (const expV of trafficDistribution.experimental_group) {
