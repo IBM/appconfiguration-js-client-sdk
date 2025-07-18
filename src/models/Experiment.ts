@@ -16,10 +16,8 @@
 
 export interface IExperiment {
     experiment_id: string;
-    experiment_name?: string;
-    hypothesis?: string;
     experiment_status?: string;
-    traffic_distribution_json: TrafficDistribution;
+    traffic_distribution: TrafficDistribution;
     iteration: Iteration;
     variations: Variation[];
     metrics: Metric[];
@@ -40,22 +38,17 @@ export interface Group {
 
 export interface Iteration {
     iteration_id: string;
-    iteration_name?: string;
     iteration_key: string;
-    start_time?: Date;
 }
 
 export interface Variation {
-    description?: string;
     variation_id: string;
-    variation_name?: string;
     variation_value: string;
 }
 
 export interface Metric {
     metric_id: string;
     primary: boolean;
-    metric_name?: string;
     metric_type: string;
     event_type: string;
     event_key: string;

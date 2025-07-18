@@ -1,6 +1,6 @@
 {
   "name": "ibm-appconfiguration-js-client-sdk",
-  "version": "0.2.0-beta.2",
+  "version": "0.2.0-beta.3",
   "description": "IBM Cloud App Configuration JavaScript Client SDK",
   "keywords": [
     "client-sdk",
