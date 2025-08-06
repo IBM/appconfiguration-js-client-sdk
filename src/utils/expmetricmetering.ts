@@ -41,7 +41,7 @@ export default class ExpMetricMetering {
 
     private environmentId: string | undefined;
 
-    private meteringInterval: number = 60 * 1000; // 1 minute
+    private meteringInterval: number = 30 * 1000; // 30 seconds
 
     private timer: any;
 

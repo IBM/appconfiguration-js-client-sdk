@@ -30,7 +30,6 @@ export interface EvaluationUsage {
     feature_id: string;
     variation_id: string;
     entity_id: string;
-    audience_group: string;
     timestamp?: string;
 }
 
@@ -41,7 +40,7 @@ export default class ExpEvalMetering {
 
     private environmentId: string | undefined;
 
-    private meteringInterval: number = 60 * 1000; // 1 minute
+    private meteringInterval: number = 30 * 1000; // 30 seconds
 
     private timer: any;
 

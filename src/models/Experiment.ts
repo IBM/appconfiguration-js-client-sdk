@@ -26,8 +26,9 @@ export interface IExperiment {
 export interface TrafficDistribution {
     type: string;
     rule_id: string;
-    control_group: Group;
     experimental_group: Group[];
+    control_variation: string;
+    non_experimental_group?: Group;
     traffic_reassignment: boolean;
 }
 

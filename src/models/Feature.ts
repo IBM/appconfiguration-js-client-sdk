@@ -41,14 +41,14 @@ interface EvaluationResult {
     value: any;
     is_enabled: boolean;
     variation_id: string;
-    audience_group: string;
+    group_type: string;
 }
 
-// variation details with audience type (experiment or control)
-interface VariationWithAudience {
+// variation details with group type (experimental or non_experimental)
+interface VariationWithGroup {
     variation_id: string;
     rollout_percentage: number;
-    audience_group: string;
+    group_type: string;
 }
 
 export default class Feature {
@@ -185,7 +185,7 @@ export default class Feature {
             value: undefined,
             is_enabled: false,
             variation_id: '',
-            audience_group: '',
+            group_type: '',
         };
         try {
             // evaluate the feature flag only if the toggle state is enabled
@@ -196,17 +196,19 @@ export default class Feature {
                     const { iteration } = this.experiment;
                     const { variations } = this.experiment;
                     if (trafficDistribution.type === 'ALL') {
-                        const allVariations: VariationWithAudience[] = [];
+                        const allVariations: VariationWithGroup[] = [];
                         for (const expV of trafficDistribution.experimental_group) {
-                            allVariations.push({ variation_id: expV.variation_id, rollout_percentage: expV.rollout_percentage, audience_group: 'experiment' });
+                            allVariations.push({ variation_id: expV.variation_id, rollout_percentage: expV.rollout_percentage, group_type: 'experimental' });
                         }
-                        allVariations.push({ variation_id: trafficDistribution.control_group.variation_id, rollout_percentage: trafficDistribution.control_group.rollout_percentage, audience_group: 'control' });
+                        if (trafficDistribution.non_experimental_group) {
+                            allVariations.push({ variation_id: trafficDistribution.non_experimental_group.variation_id, rollout_percentage: trafficDistribution.non_experimental_group.rollout_percentage, group_type: 'non_experimental' });
+                        }
                         let variationId = '';
                         let totalPercentage = 0;
-                        let audienceGroup = '';
+                        let groupType = '';
                         const hashValue = getNormalizedValue(''.concat(entityId, ':', this.feature_id, ':', iteration.iteration_key));
                         for (const v of allVariations) {
-                            audienceGroup = v.audience_group;
+                            groupType = v.group_type;
                             variationId = v.variation_id;
                             totalPercentage += v.rollout_percentage;
                             if (hashValue < totalPercentage) {
@@ -215,7 +217,7 @@ export default class Feature {
                         }
                         for (const v of variations) {
                             if (variationId === v.variation_id) {
-                                evaluationResult.audience_group = audienceGroup;
+                                evaluationResult.group_type = groupType;
                                 evaluationResult.variation_id = v.variation_id
                                 return { current_value: v.variation_value };
                             }
@@ -265,17 +267,19 @@ export default class Feature {
                         // case 1: user doesn't belong to any of the rules
                         // case 2: feature flag is not targeted with rules
                         // case 3: feature flag is targeted with rules, but entityAttributes are not passed
-                        const allVariations: VariationWithAudience[] = [];
+                        const allVariations: VariationWithGroup[] = [];
                         for (const expV of trafficDistribution.experimental_group) {
-                            allVariations.push({ variation_id: expV.variation_id, rollout_percentage: expV.rollout_percentage, audience_group: 'experiment' });
+                            allVariations.push({ variation_id: expV.variation_id, rollout_percentage: expV.rollout_percentage, group_type: 'experimental' });
                         }
-                        allVariations.push({ variation_id: trafficDistribution.control_group.variation_id, rollout_percentage: trafficDistribution.control_group.rollout_percentage, audience_group: 'control' });
+                        if (trafficDistribution.non_experimental_group) {
+                            allVariations.push({ variation_id: trafficDistribution.non_experimental_group.variation_id, rollout_percentage: trafficDistribution.non_experimental_group.rollout_percentage, group_type: 'non_experimental' });
+                        }
                         let variationId = '';
                         let totalPercentage = 0;
-                        let audienceGroup = '';
+                        let groupType = '';
                         const hashValue = getNormalizedValue(''.concat(entityId, ':', this.feature_id, ':', iteration.iteration_key));
                         for (const v of allVariations) {
-                            audienceGroup = v.audience_group;
+                            groupType = v.group_type;
                             variationId = v.variation_id;
                             totalPercentage += v.rollout_percentage;
                             if (hashValue < totalPercentage) {
@@ -284,7 +288,7 @@ export default class Feature {
                         }
                         for (const v of variations) {
                             if (variationId === v.variation_id) {
-                                evaluationResult.audience_group = audienceGroup;
+                                evaluationResult.group_type = groupType;
                                 evaluationResult.variation_id = v.variation_id
                                 return { current_value: v.variation_value };
                             }
@@ -311,17 +315,19 @@ export default class Feature {
                                                     evaluationResult.evaluated_segment_id = segmentId;
                                                     const expRuleId = parseInt(trafficDistribution.rule_id)
                                                     if (expRuleId === segmentRule.order) {
-                                                        const allVariations: VariationWithAudience[] = [];
+                                                        const allVariations: VariationWithGroup[] = [];
                                                         for (const expV of trafficDistribution.experimental_group) {
-                                                            allVariations.push({ variation_id: expV.variation_id, rollout_percentage: expV.rollout_percentage, audience_group: 'experiment' });
+                                                            allVariations.push({ variation_id: expV.variation_id, rollout_percentage: expV.rollout_percentage, group_type: 'experimental' });
                                                         }
-                                                        allVariations.push({ variation_id: trafficDistribution.control_group.variation_id, rollout_percentage: trafficDistribution.control_group.rollout_percentage, audience_group: 'control' });
+                                                        if (trafficDistribution.non_experimental_group) {
+                                                            allVariations.push({ variation_id: trafficDistribution.non_experimental_group.variation_id, rollout_percentage: trafficDistribution.non_experimental_group.rollout_percentage, group_type: 'non_experimental' });
+                                                        }
                                                         let variationId = '';
                                                         let totalPercentage = 0;
-                                                        let audienceGroup = '';
+                                                        let groupType = '';
                                                         const hashValue = getNormalizedValue(''.concat(entityId, ':', this.feature_id, ':', iteration.iteration_key));
                                                         for (const v of allVariations) {
-                                                            audienceGroup = v.audience_group;
+                                                            groupType = v.group_type;
                                                             variationId = v.variation_id;
                                                             totalPercentage += v.rollout_percentage;
                                                             if (hashValue < totalPercentage) {
@@ -330,7 +336,7 @@ export default class Feature {
                                                         }
                                                         for (const v of variations) {
                                                             if (variationId === v.variation_id) {
-                                                                evaluationResult.audience_group = audienceGroup;
+                                                                evaluationResult.group_type = groupType;
                                                                 evaluationResult.variation_id = v.variation_id
                                                                 return { current_value: v.variation_value };
                                                             }
@@ -386,8 +392,8 @@ export default class Feature {
             }
             return { current_value: this.disabled_value, is_enabled: false };
         } finally {
-            if (this.experiment && this.experiment.experiment_status === 'RUNNING' && evaluationResult.variation_id.length > 0) {
-                ExpEvalMetering.getInstance().addMetering({ experiment_id: this.experiment.experiment_id, iteration_id: this.experiment?.iteration.iteration_id, feature_id: this.feature_id, variation_id: evaluationResult.variation_id, entity_id: entityId, audience_group: evaluationResult.audience_group, })
+            if (this.experiment && this.experiment.experiment_status === 'RUNNING' && evaluationResult.variation_id.length > 0 && evaluationResult.group_type === 'experimental') {
+                ExpEvalMetering.getInstance().addMetering({ experiment_id: this.experiment.experiment_id, iteration_id: this.experiment?.iteration.iteration_id, feature_id: this.feature_id, variation_id: evaluationResult.variation_id, entity_id: entityId, })
             } else {
                 Metering.getInstance().addMetering(entityId, evaluationResult.evaluated_segment_id, this.feature_id, null);
             }
@@ -408,7 +414,7 @@ export default class Feature {
             value: undefined,
             is_enabled: false,
             variation_id: '',
-            audience_group: ''
+            group_type: ''
         };
 
         try {
