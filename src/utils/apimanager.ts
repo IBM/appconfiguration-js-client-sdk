@@ -19,8 +19,28 @@ import { EvaluationEvent } from './expevaluationmetering';
 import { MetricEvent } from './expmetricmetering';
 import { MeteringRequestBody } from './metering';
 import UrlBuilder from './urlbuilder';
+import {SdkConfigResponse} from "../models/SdkConfigResponse";
 
 const urlBuilder = UrlBuilder.getInstance();
+
+export async function retryableGetConfig(retries: number = Constants.NUMBER_OF_RETRIES): Promise<SdkConfigResponse> {
+    const url = urlBuilder.getConfigUrl();
+    let params: RequestInit = {
+        method: 'GET',
+        headers: urlBuilder.getAPICallHeaders(),
+    }
+    return fetch(url, params).then(async (response) => {
+        if (response.ok) {
+            return await response.json() as Promise<SdkConfigResponse>
+        }
+        if ((response.status >= 500 && response.status <= 599) || response.status === 429) {
+            if (retries > 1) {
+                return retryableGetConfig(retries - 1);
+            }
+        }
+        throw new APIError(await response.text(), response.status);
+    });
+}
 
 export function fetchAvailable(): boolean {
     if ('fetch' in window) {

@@ -26,6 +26,7 @@ import Metering from './utils/metering';
 const configurationHandlerInstance = ConfigurationHandler.getInstance();
 const metering = Metering.getInstance();
 let overrideServiceUrl: string;
+let isRestrictedNetwork: boolean = false;
 
 export default class AppConfiguration {
     private static instance: AppConfiguration;
@@ -65,7 +66,7 @@ export default class AppConfiguration {
                 throw new Error(''.concat(Constants.APP_CONFIGURATION, 'apikey is required'));
             }
         }
-        configurationHandlerInstance.init(region, guid, apikey, overrideServiceUrl);
+        configurationHandlerInstance.init(region, guid, apikey, overrideServiceUrl, isRestrictedNetwork);
         this.isInitialized = true;
     }
 
@@ -212,6 +213,20 @@ export default class AppConfiguration {
             return;
         }
         throw new Error(''.concat(Constants.APP_CONFIGURATION, 'Unexpected url passed to overrideServiceUrl()'));
+    }
+
+    /**
+     * @internal
+     *
+     * Set restricted network state. The method should be invoked before SDK initialization.
+     * ```js
+     * // Example
+     * appConfigClient.setClientInRestrictedNetwork();
+     * ```
+     *  NOTE: To be used only in network restricted environments.
+     */
+    public setClientInRestrictedNetwork() {
+        isRestrictedNetwork = true;
     }
 
     /**
