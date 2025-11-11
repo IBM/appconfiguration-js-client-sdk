@@ -25,6 +25,7 @@ import Emitter from './utils/events-handler';
 import Metering from './utils/metering';
 import UrlBuilder from './utils/urlbuilder';
 import { Logger } from './utils/logger';
+import {retryableGetConfig} from "./utils/apimanager";
 
 const urlBuilder = UrlBuilder.getInstance();
 const metering = Metering.getInstance();
@@ -43,11 +44,19 @@ export default class ConfigurationHandler {
 
     private overrideServiceUrl: string | undefined;
 
-    init(region: string, guid: string, apikey: string, overrideServiceUrl: string) {
+    private isRestrictedNetwork: boolean = false;
+
+    private setContextConfigFetched: boolean = false;
+
+    init(region: string, guid: string, apikey: string, overrideServiceUrl: string, isRestrictedNetwork: boolean) {
         this.region = region;
         this.guid = guid;
         this.apikey = apikey;
         this.overrideServiceUrl = overrideServiceUrl;
+        this.isRestrictedNetwork = isRestrictedNetwork;
+        if ((window as any)?.IBM_CLOUD_APP_CONFIG?.isClientInRestrictedNetwork) {
+            this.isRestrictedNetwork = true;
+        }
     }
 
     async setContext(collectionId: string, environmentId: string): Promise<void> {
@@ -55,12 +64,23 @@ export default class ConfigurationHandler {
             region: this.region as string,
             guid: this.guid as string,
             apikey: this.apikey as string,
+            collectionId: collectionId,
+            environmentId: environmentId,
             overrideServiceUrl: this.overrideServiceUrl as string,
-            collectionId,
-            environmentId,
+            isRestrictedNetwork: this.isRestrictedNetwork,
         })
         metering.init(collectionId, environmentId);
-        await this.connectEventSource();
+        if (this.isRestrictedNetwork) {
+            const config = await retryableGetConfig();
+            this.saveInCache(config);
+            this.setContextConfigFetched = true;
+            this.connectEventSource().catch(reason => {
+                return Promise.reject(reason);
+            });
+        }
+        else {
+            await this.connectEventSource();
+        }
     }
 
     saveInCache(data: SdkConfigResponse) {
@@ -96,12 +116,22 @@ export default class ConfigurationHandler {
         const headers = urlBuilder.getEventSourceHeaders();
         const source = new EventSourcePolyfill(url, headers);
 
-        source.addEventListener<'SSEConfig_payload'>('SSEConfig_payload', (event) => {
-            const eventData: SdkConfigResponse = JSON.parse(event.data);
-            logger.log("Update event received.");
-            this.saveInCache(eventData);
-            Emitter.emit(Constants.CONFIGURATION_UPDATE_EVENT);
-        });
+        if (this.isRestrictedNetwork) {
+            source.addEventListener<'SSEEvent_update'>('SSEEvent_update', (_) => {
+                logger.log("Update event received. Fetching data from server...");
+                retryableGetConfig().then(config => {
+                    this.saveInCache(config);
+                    Emitter.emit(Constants.CONFIGURATION_UPDATE_EVENT);
+                })
+            });
+        } else {
+            source.addEventListener<'SSEConfig_payload'>('SSEConfig_payload', (event) => {
+                const eventData: SdkConfigResponse = JSON.parse(event.data);
+                logger.log("Update event received.");
+                this.saveInCache(eventData);
+                Emitter.emit(Constants.CONFIGURATION_UPDATE_EVENT);
+            });
+        }
 
         return new Promise<void>((resolve, reject) => {
             source.addEventListener('error', (err) => {
@@ -109,11 +139,24 @@ export default class ConfigurationHandler {
             });
 
             source.addEventListener<'Registration'>('Registration', (event) => {
-                const eventData: SdkConfigResponse = JSON.parse(event.data);
                 logger.log("Client registration complete.");
-                this.saveInCache(eventData);
                 Emitter.emit(Constants.REGISTRATION_EVENT);
-                resolve();
+                if (this.isRestrictedNetwork) {
+                    if (this.setContextConfigFetched) {
+                        this.setContextConfigFetched = false;
+                        resolve();
+                    }
+                    else {
+                        retryableGetConfig().then(config => {
+                            this.saveInCache(config);
+                            resolve();
+                        })
+                    }
+                } else {
+                    const eventData: SdkConfigResponse = JSON.parse(event.data);
+                    this.saveInCache(eventData);
+                    resolve();
+                }
             });
         });
     }
