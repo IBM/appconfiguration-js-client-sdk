@@ -140,21 +140,23 @@ export default class ConfigurationHandler {
 
             source.addEventListener<'Registration'>('Registration', (event) => {
                 logger.log("Client registration complete.");
-                Emitter.emit(Constants.REGISTRATION_EVENT);
                 if (this.isRestrictedNetwork) {
                     if (this.setContextConfigFetched) {
                         this.setContextConfigFetched = false;
+                        Emitter.emit(Constants.REGISTRATION_EVENT);
                         resolve();
                     }
                     else {
                         retryableGetConfig().then(config => {
                             this.saveInCache(config);
+                            Emitter.emit(Constants.REGISTRATION_EVENT);
                             resolve();
                         })
                     }
                 } else {
                     const eventData: SdkConfigResponse = JSON.parse(event.data);
                     this.saveInCache(eventData);
+                    Emitter.emit(Constants.REGISTRATION_EVENT);
                     resolve();
                 }
             });
