@@ -10,7 +10,7 @@ To provide maximum security, we utilize a random nonce during the encryption pro
     - Navigate to the **Service Credentials** section of your App Configuration instance on the IBM Cloud dashboard.
     - Generate a **`Client SDK`** role APIKey and copy the apikey from the service credentials.
 2. Encrypt Your APIKey:
-    - Use the following API endpoint to encrypt your plain APIKey
+    - Use the following API endpoint to encrypt your plain APIKey. Refer [this](https://cloud.ibm.com/apidocs/app-configuration#authentication) for authenticating your API request.
         ```code
         POST /apprapp/feature/v1/instances/<guid>/encrypt
         ```
