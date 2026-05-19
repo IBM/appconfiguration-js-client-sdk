@@ -106,7 +106,7 @@ export default class ConfigurationHandler {
                     if (rolloutMap) {
                         _rolloutConfigMap[feature.feature_id] = rolloutMap;
                     } else {
-                        logger.error('Error parsing feature rollout configuration');
+                        logger.log('Error parsing feature rollout configuration');
                     }
                 }
                 
@@ -119,7 +119,7 @@ export default class ConfigurationHandler {
                                 const key = feature.feature_id + Constants.DELIMITER + (segmentRule.rule_id || '');
                                 _rolloutConfigMap[key] = rolloutMap;
                             } else {
-                                logger.error('Error parsing segment rule rollout configuration');
+                                logger.log('Error parsing segment rule rollout configuration');
                             }
                         }
                     }
@@ -152,7 +152,7 @@ export default class ConfigurationHandler {
 
         if (this.isRestrictedNetwork) {
             source.addEventListener<'SSEEvent_update'>('SSEEvent_update', (_) => {
-                logger.info("Update event received. Fetching data from server...");
+                logger.log("Update event received. Fetching data from server...");
                 retryableGetConfig().then(config => {
                     this.saveInCache(config);
                     Emitter.emit(Constants.CONFIGURATION_UPDATE_EVENT);
@@ -161,7 +161,7 @@ export default class ConfigurationHandler {
         } else {
             source.addEventListener<'SSEConfig_payload'>('SSEConfig_payload', (event) => {
                 const eventData: SdkConfigResponse = JSON.parse(event.data);
-                logger.info("Update event received.");
+                logger.log("Update event received.");
                 this.saveInCache(eventData);
                 Emitter.emit(Constants.CONFIGURATION_UPDATE_EVENT);
             });
@@ -177,14 +177,14 @@ export default class ConfigurationHandler {
                     if (this.setContextConfigFetched) {
                         this.setContextConfigFetched = false;
                         Emitter.emit(Constants.REGISTRATION_EVENT);
-                        logger.info("Client registration complete.");
+                        logger.log("Client registration complete.");
                         resolve();
                     }
                     else {
                         retryableGetConfig().then(config => {
                             this.saveInCache(config);
                             Emitter.emit(Constants.REGISTRATION_EVENT);
-                            logger.info("Client registration complete.");
+                            logger.log("Client registration complete.");
                             resolve();
                         })
                     }
@@ -192,7 +192,7 @@ export default class ConfigurationHandler {
                     const eventData: SdkConfigResponse = JSON.parse(event.data);
                     this.saveInCache(eventData);
                     Emitter.emit(Constants.REGISTRATION_EVENT);
-                    logger.info("Client registration complete.");
+                    logger.log("Client registration complete.");
                     resolve();
                 }
             });
