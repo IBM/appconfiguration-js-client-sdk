@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import BTree from 'sorted-btree';
 import { getCacheInstance, setCache } from './models/Cache';
 import { SdkConfigResponse } from './models/SdkConfigResponse';
 import Feature, { IFeature } from './models/Feature';
@@ -25,6 +26,8 @@ import Emitter from './utils/events-handler';
 import Metering from './utils/metering';
 import UrlBuilder from './utils/urlbuilder';
 import { Logger } from './utils/logger';
+import { parseRolloutConfigurationPhases, PhaseScheduler } from './utils/rollout';
+import {retryableGetConfig} from "./utils/apimanager";
 
 const urlBuilder = UrlBuilder.getInstance();
 const metering = Metering.getInstance();
@@ -43,11 +46,19 @@ export default class ConfigurationHandler {
 
     private overrideServiceUrl: string | undefined;
 
-    init(region: string, guid: string, apikey: string, overrideServiceUrl: string) {
+    private isRestrictedNetwork: boolean = false;
+
+    private setContextConfigFetched: boolean = false;
+
+    init(region: string, guid: string, apikey: string, overrideServiceUrl: string, isRestrictedNetwork: boolean) {
         this.region = region;
         this.guid = guid;
         this.apikey = apikey;
         this.overrideServiceUrl = overrideServiceUrl;
+        this.isRestrictedNetwork = isRestrictedNetwork;
+        if ((window as any)?.IBM_CLOUD_APP_CONFIG?.isClientInRestrictedNetwork) {
+            this.isRestrictedNetwork = true;
+        }
     }
 
     async setContext(collectionId: string, environmentId: string): Promise<void> {
@@ -55,21 +66,64 @@ export default class ConfigurationHandler {
             region: this.region as string,
             guid: this.guid as string,
             apikey: this.apikey as string,
+            collectionId: collectionId,
+            environmentId: environmentId,
             overrideServiceUrl: this.overrideServiceUrl as string,
-            collectionId,
-            environmentId,
+            isRestrictedNetwork: this.isRestrictedNetwork,
         })
         metering.init(collectionId, environmentId);
-        await this.connectEventSource();
+        PhaseScheduler.onPhaseCallback = () => {
+            Emitter.emit(Constants.CONFIGURATION_UPDATE_EVENT);
+        };
+        if (this.isRestrictedNetwork) {
+            const config = await retryableGetConfig();
+            this.saveInCache(config);
+            this.setContextConfigFetched = true;
+            this.connectEventSource().catch(reason => {
+                return Promise.reject(reason);
+            });
+        }
+        else {
+            await this.connectEventSource();
+        }
     }
 
     saveInCache(data: SdkConfigResponse) {
 
+        PhaseScheduler.reset();
+
         const _featureMap: { [x: string]: Feature } = {};
+        const _rolloutConfigMap: { [x: string]: BTree<number, number> } = {};
+        
         if (Object.keys(data.environments[0].features).length) {
             const featuresList: IFeature[] = data.environments[0].features;
             featuresList.forEach((feature) => {
                 _featureMap[feature.feature_id] = new Feature(feature);
+                
+                // Parse feature-level progressive rollout
+                if (feature.rollout_configuration) {
+                    const rolloutMap = parseRolloutConfigurationPhases(feature.rollout_configuration);
+                    if (rolloutMap) {
+                        _rolloutConfigMap[feature.feature_id] = rolloutMap;
+                    } else {
+                        logger.log('Error parsing feature rollout configuration');
+                    }
+                }
+                
+                // Parse segment-level progressive rollout
+                if (feature.segment_rules && feature.segment_rules.length > 0) {
+                    for (const segmentRule of feature.segment_rules) {
+                        if (segmentRule.rollout_configuration) {
+                            const rolloutMap = parseRolloutConfigurationPhases(segmentRule.rollout_configuration);
+                            if (rolloutMap) {
+                                const key = feature.feature_id + Constants.DELIMITER + (segmentRule.rule_id || '');
+                                _rolloutConfigMap[key] = rolloutMap;
+                            } else {
+                                logger.log('Error parsing segment rule rollout configuration');
+                            }
+                        }
+                    }
+                }
             });
         }
 
@@ -88,7 +142,7 @@ export default class ConfigurationHandler {
                 _segmentMap[segment.segment_id] = new Segment(segment);
             });
         }
-        setCache(_featureMap, _propertyMap, _segmentMap);
+        setCache(_featureMap, _propertyMap, _segmentMap, _rolloutConfigMap);
     }
 
     connectEventSource(): Promise<void> {
@@ -96,12 +150,22 @@ export default class ConfigurationHandler {
         const headers = urlBuilder.getEventSourceHeaders();
         const source = new EventSourcePolyfill(url, headers);
 
-        source.addEventListener<'SSEConfig_payload'>('SSEConfig_payload', (event) => {
-            const eventData: SdkConfigResponse = JSON.parse(event.data);
-            logger.log("Update event received.");
-            this.saveInCache(eventData);
-            Emitter.emit(Constants.CONFIGURATION_UPDATE_EVENT);
-        });
+        if (this.isRestrictedNetwork) {
+            source.addEventListener<'SSEEvent_update'>('SSEEvent_update', (_) => {
+                logger.log("Update event received. Fetching data from server...");
+                retryableGetConfig().then(config => {
+                    this.saveInCache(config);
+                    Emitter.emit(Constants.CONFIGURATION_UPDATE_EVENT);
+                })
+            });
+        } else {
+            source.addEventListener<'SSEConfig_payload'>('SSEConfig_payload', (event) => {
+                const eventData: SdkConfigResponse = JSON.parse(event.data);
+                logger.log("Update event received.");
+                this.saveInCache(eventData);
+                Emitter.emit(Constants.CONFIGURATION_UPDATE_EVENT);
+            });
+        }
 
         return new Promise<void>((resolve, reject) => {
             source.addEventListener('error', (err) => {
@@ -109,11 +173,28 @@ export default class ConfigurationHandler {
             });
 
             source.addEventListener<'Registration'>('Registration', (event) => {
-                const eventData: SdkConfigResponse = JSON.parse(event.data);
-                logger.log("Client registration complete.");
-                this.saveInCache(eventData);
-                Emitter.emit(Constants.REGISTRATION_EVENT);
-                resolve();
+                if (this.isRestrictedNetwork) {
+                    if (this.setContextConfigFetched) {
+                        this.setContextConfigFetched = false;
+                        Emitter.emit(Constants.REGISTRATION_EVENT);
+                        logger.log("Client registration complete.");
+                        resolve();
+                    }
+                    else {
+                        retryableGetConfig().then(config => {
+                            this.saveInCache(config);
+                            Emitter.emit(Constants.REGISTRATION_EVENT);
+                            logger.log("Client registration complete.");
+                            resolve();
+                        })
+                    }
+                } else {
+                    const eventData: SdkConfigResponse = JSON.parse(event.data);
+                    this.saveInCache(eventData);
+                    Emitter.emit(Constants.REGISTRATION_EVENT);
+                    logger.log("Client registration complete.");
+                    resolve();
+                }
             });
         });
     }

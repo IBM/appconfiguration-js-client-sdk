@@ -25,6 +25,7 @@ interface UrlBuilderOptions {
     collectionId: string;
     environmentId: string;
     overrideServiceUrl: string;
+    isRestrictedNetwork: boolean;
 }
 
 export default class UrlBuilder {
@@ -42,6 +43,8 @@ export default class UrlBuilder {
 
     private overrideServiceUrl: string | undefined;
 
+    private isRestrictedNetwork: boolean = false;
+
     private constructor() { /* singleton design pattern */ }
 
     init(options: UrlBuilderOptions) {
@@ -51,6 +54,7 @@ export default class UrlBuilder {
         this.collectionId = options.collectionId;
         this.environmentId = options.environmentId;
         this.overrideServiceUrl = options.overrideServiceUrl;
+        this.isRestrictedNetwork = options.isRestrictedNetwork;
     }
 
     getAPICallHeaders(isPost = false) {
@@ -80,12 +84,22 @@ export default class UrlBuilder {
         return ''.concat('https://', this.region as string, '.apprapp.cloud.ibm.com');
     }
 
+    getConfigUrl(): string {
+        return ''.concat(this.getBaseServiceUrl(), '/apprapp/feature/v1/instances/', this.guid as string, '/config',
+            '?action=sdkConfig&collection_id=' + this.collectionId as string, '&environment_id=', this.environmentId as string);
+    }
+
     getMeteringUrl(): string {
         return ''.concat(this.getBaseServiceUrl(), '/apprapp/events/v1/instances/', this.guid as string, '/usage');
     }
 
     getEventSourceUrl(): string {
-        return ''.concat(this.getBaseServiceUrl(), '/apprapp/feature/v1/instances/', this.guid as string, '/environments/', this.environmentId as string, '/sse/subscribe?collection_id=', this.collectionId as string)
+        const url = ''.concat(this.getBaseServiceUrl(), '/apprapp/feature/v1/instances/', this.guid as string,
+            '/environments/', this.environmentId as string, '/sse/subscribe?collection_id=', this.collectionId as string);
+        if (this.isRestrictedNetwork) {
+            return url + '&events_only=true';
+        }
+        return url;
     }
 
     public static getInstance() {

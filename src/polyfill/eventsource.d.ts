@@ -43,6 +43,7 @@ export interface EventSourceEventMap {
     "open": Event;
     "Registration": MessageEvent; // custom event added for App Config purpose only
     "SSEConfig_payload": MessageEvent; // custom event added for App Config purpose only
+    "SSEEvent_update": MessageEvent; // custom event added for App Config purpose only
 }
 
 export interface MessageEvent extends Event {
