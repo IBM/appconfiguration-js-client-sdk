@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import BTree from 'sorted-btree';
 import Feature from './Feature';
 import Property from './Property';
 import Segment from './Segment';
@@ -22,6 +23,7 @@ interface Cache {
     features: { [x: string]: Feature };
     properties: { [x: string]: Property };
     segments: { [x: string]: Segment };
+    rolloutConfigMap: { [x: string]: BTree<number, number> };
 }
 
 let cacheInstance: Cache;
@@ -29,16 +31,19 @@ let cacheInstance: Cache;
 export function setCache(
     features: { [x: string]: Feature },
     properties: { [x: string]: Property },
-    segments: { [x: string]: Segment }
+    segments: { [x: string]: Segment },
+    rolloutConfigMap: { [x: string]: BTree<number, number> }
 ) {
     const cache: Cache = {
         features: {},
         properties: {},
         segments: {},
+        rolloutConfigMap: {},
     };
     cache.features = features;
     cache.properties = properties;
     cache.segments = segments;
+    cache.rolloutConfigMap = rolloutConfigMap;
     cacheInstance = cache;
 }
 
