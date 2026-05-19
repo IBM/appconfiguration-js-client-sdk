@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+import * as Constants from '../utils/constants';
+import { RolloutConfiguration } from '../utils/rollout';
+
 interface IRule {
     segments: string[];
 }
@@ -23,6 +26,9 @@ export interface IFeatureSegmentRule {
     value: any;
     order: number;
     rollout_percentage?: number | string;
+    rule_id?: string;
+    rollout_type?: string;
+    rollout_configuration?: RolloutConfiguration;
 }
 
 export default class FeatureSegmentRule {
@@ -34,16 +40,28 @@ export default class FeatureSegmentRule {
 
     rollout_percentage: number | string;
 
+    rule_id: string | undefined;
+
+    rollout_type: string;
+
+    rollout_configuration: RolloutConfiguration | undefined;
+
     constructor({
         rules,
         value,
         order,
         rollout_percentage = 100,
+        rule_id = undefined,
+        rollout_type = Constants.MANUAL,
+        rollout_configuration = undefined,
     }: IFeatureSegmentRule) {
         this.rules = rules;
         this.value = value;
         this.order = order;
-        this.rollout_percentage = rollout_percentage
+        this.rollout_percentage = rollout_percentage;
+        this.rule_id = rule_id;
+        this.rollout_type = rollout_type;
+        this.rollout_configuration = rollout_configuration;
     }
 
     public getRules(): IRule[] {
@@ -60,5 +78,17 @@ export default class FeatureSegmentRule {
 
     public getRolloutPercentage(): number | string {
         return this.rollout_percentage;
+    }
+
+    public getRuleId(): string | undefined {
+        return this.rule_id;
+    }
+
+    public getRolloutType(): string {
+        return this.rollout_type || Constants.MANUAL;
+    }
+
+    public getRolloutConfiguration(): RolloutConfiguration | undefined {
+        return this.rollout_configuration;
     }
 }

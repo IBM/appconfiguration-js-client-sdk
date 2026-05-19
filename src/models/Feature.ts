@@ -22,6 +22,8 @@ import FeatureSegmentRule, { IFeatureSegmentRule } from './FeatureSegmentRule';
 import { Logger } from '../utils/logger';
 
 const logger = new Logger(Constants.APP_CONFIGURATION);
+import { RolloutConfiguration, getCurrentRolloutPercentage } from '../utils/rollout';
+import { PROGRESSIVE } from "../utils/constants";
 
 export interface IFeature {
     name: string;
@@ -33,6 +35,8 @@ export interface IFeature {
     segment_rules: IFeatureSegmentRule[];
     enabled: boolean;
     rollout_percentage?: number;
+    rollout_type?: string;
+    rollout_configuration?: RolloutConfiguration;
 }
 
 interface EvaluationResult {
@@ -60,6 +64,10 @@ export default class Feature {
 
     private rollout_percentage: number;
 
+    private rollout_type: string;
+
+    private rollout_configuration: RolloutConfiguration | undefined;
+
     constructor({
         name,
         feature_id,
@@ -70,6 +78,8 @@ export default class Feature {
         segment_rules,
         enabled,
         rollout_percentage = 100,
+        rollout_type = Constants.MANUAL,
+        rollout_configuration = undefined,
     }: IFeature) {
         this.name = name;
         this.feature_id = feature_id;
@@ -81,6 +91,8 @@ export default class Feature {
         this.rollout_percentage = rollout_percentage;
         this.segment_rules = [];
         for (const element of segment_rules) this.segment_rules.push(new FeatureSegmentRule(element));
+        this.rollout_type = rollout_type;
+        this.rollout_configuration = rollout_configuration;
     }
 
     /**
@@ -181,7 +193,19 @@ export default class Feature {
                     return { current_value: evaluationResult.value, is_enabled: evaluationResult.is_enabled };
                 }
                 // since the feature flag is not configured with any targeting, use the entityId and check whether the entityId is eligible for the default rollout
-                if (this.rollout_percentage === 100 || (getNormalizedValue(''.concat(entityId, ':', this.feature_id)) < this.rollout_percentage)) {
+                let rolloutPercentage;
+                if (this.rollout_configuration || this.rollout_type === PROGRESSIVE) {
+                    const rolloutMap = getCacheInstance().rolloutConfigMap[this.feature_id];
+                    if (rolloutMap) {
+                        entityId += this.rollout_configuration?.start_at;
+                        rolloutPercentage = getCurrentRolloutPercentage(rolloutMap);
+                    } else {
+                        rolloutPercentage = 0;
+                    }
+                } else {
+                    rolloutPercentage = this.rollout_percentage;
+                }
+                if (rolloutPercentage === 100 || (getNormalizedValue(''.concat(entityId, ':', this.feature_id)) < rolloutPercentage)) {
                     return { current_value: this.enabled_value, is_enabled: true };
                 }
                 return { current_value: this.disabled_value, is_enabled: false };
@@ -218,10 +242,32 @@ export default class Feature {
                             // for each segment in a rule
                             for (const innerLevel of segments) {
                                 const segmentId: string = innerLevel
-                                // check whether the entityAttributes satifies all the rules of that segment
+                                // check whether the entityAttributes satisfies all the rules of that segment
                                 if (this.evaluateSegment(segmentId, entityAttributes)) {
                                     resultDict.evaluated_segment_id = segmentId;
-                                    const segmentLevelRolloutPercentage = segmentRule.rollout_percentage === Constants.DEFAULT_ROLLOUT_PERCENTAGE ? this.rollout_percentage : segmentRule.rollout_percentage as number;
+                                    let segmentLevelRolloutPercentage: number;
+                                    const segmentRuleObj = new FeatureSegmentRule(segmentRule);
+                                    if (segmentRuleObj.getRolloutConfiguration() !== undefined || segmentRuleObj.getRolloutType() === PROGRESSIVE) {
+                                        // phased rollout
+                                        let rolloutMap;
+                                        if (segmentRule.rollout_percentage === Constants.DEFAULT_ROLLOUT_PERCENTAGE) {
+                                            // Use feature-level rollout configuration
+                                            rolloutMap = getCacheInstance().rolloutConfigMap[this.feature_id];
+                                        } else {
+                                            // Use segment-level rollout configuration
+                                            const key = this.feature_id + Constants.DELIMITER + segmentRuleObj.getRuleId()?.toString();
+                                            rolloutMap = getCacheInstance().rolloutConfigMap[key];
+                                        }
+                                        if (rolloutMap) {
+                                            entityId += segmentRuleObj.getRolloutConfiguration()?.start_at;
+                                            segmentLevelRolloutPercentage = getCurrentRolloutPercentage(rolloutMap);
+                                        } else {
+                                            segmentLevelRolloutPercentage = 0;
+                                        }
+                                    } else {
+                                        // manual rollout
+                                        segmentLevelRolloutPercentage = segmentRule.rollout_percentage === Constants.DEFAULT_ROLLOUT_PERCENTAGE ? this.rollout_percentage : segmentRule.rollout_percentage as number;
+                                    }
                                     // check whether the entityId is eligible for segment rollout
                                     if (segmentLevelRolloutPercentage === 100 || (getNormalizedValue(''.concat(entityId, ':', this.feature_id)) < segmentLevelRolloutPercentage)) {
                                         // since the entityId is eligible for segment rollout the return value should be either of inherited or overridden value
@@ -248,7 +294,19 @@ export default class Feature {
 
         // since entityAttributes did not satisfy any of the targeting rules
         // check whether the entityId is eligible for default rollout
-        if (this.rollout_percentage === 100 || (getNormalizedValue(''.concat(entityId, ':', this.feature_id)) < this.rollout_percentage)) {
+        let rolloutPercentage;
+        if (this.rollout_configuration || this.rollout_type === PROGRESSIVE) {
+            const rolloutMap = getCacheInstance().rolloutConfigMap[this.feature_id];
+            if (rolloutMap) {
+                entityId += this.rollout_configuration?.start_at;
+                rolloutPercentage = getCurrentRolloutPercentage(rolloutMap);
+            } else {
+                rolloutPercentage = 0;
+            }
+        } else {
+            rolloutPercentage = this.rollout_percentage;
+        }
+        if (rolloutPercentage === 100 || (getNormalizedValue(''.concat(entityId, ':', this.feature_id)) < rolloutPercentage)) {
             resultDict.value = this.enabled_value;
             resultDict.is_enabled = true;
         } else {

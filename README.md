@@ -67,6 +67,21 @@ In the above snippet, the async function `initialiseAppConfig()` will return an 
 
 > :warning: It is expected that initialisation to be done **only once**.
 
+### Client in Restricted network case
+
+If the appConfigClient runs in restricted network where number of characters in response are being restricted, use either
+function call
+```js
+// call this function before calling setContext
+appConfigClient.setClientInRestrictedNetwork();
+```
+or
+set browser window variable like this
+```js
+window.IBM_CLOUD_APP_CONFIG.isClientInRestrictedNetwork = true;
+```
+> warning: If opted into this, number of api calls wil be increased, so only use if necessary
+
 After the SDK is initialised successfully the feature flag & properties can be retrieved using the `appConfigClient` as shown in the below code snippet.
 <details><summary>Expand to view the example snippet</summary>
 
