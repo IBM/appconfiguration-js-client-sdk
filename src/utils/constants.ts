@@ -20,11 +20,18 @@ export const DEFAULT_SEGMENT_ID = '$$null$$';
 export const DEFAULT_FEATURE_VALUE = '$default';
 export const DEFAULT_PROPERTY_VALUE = '$default';
 export const DEFAULT_ROLLOUT_PERCENTAGE = '$default';
-export const DEFAULT_USAGE_LIMIT = 25;
+export const DEFAULT_USAGE_LIMIT = 30;
 export const NUMBER_OF_RETRIES = 3;
 export const MAX_HASH_VALUE = 2 ** 32;
 export const NORMALIZER = 100;
-export const EVENT_SOURCE_HEARTBEAT_TIMEOUT = 6 * 3600 * 1000; // 6 hours
+export const EVENT_SOURCE_HEARTBEAT_TIMEOUT = 10 * 60 * 1000; // 10 minutes
 export const CONFIGURATION_UPDATE_EVENT = 'configurationUpdate';
 export const REGISTRATION_EVENT = 'registration';
 export const INVALID_ENTITY_ID = 'Invalid entityId passed to';
+
+// Rollout types
+export const MANUAL = 'MANUAL';
+export const PROGRESSIVE = 'PROGRESSIVE';
+
+// Delimiter for composite keys
+export const DELIMITER = '\u001F';
