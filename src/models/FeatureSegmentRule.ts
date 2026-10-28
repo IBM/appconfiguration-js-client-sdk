@@ -21,14 +21,23 @@ interface IRule {
     segments: string[];
 }
 
+export interface IFeatureSegmentRuleMetric {
+    id: string;
+    type: string;
+    event_key?: string;
+}
+
 export interface IFeatureSegmentRule {
     rules: IRule[];
     value: any;
     order: number;
     rollout_percentage?: number | string;
     rule_id?: string;
+    rollout_id?: string | null;
     rollout_type?: string;
     rollout_configuration?: RolloutConfiguration;
+    metrics?: IFeatureSegmentRuleMetric[];
+    metric_map?: { [eventKey: string]: IFeatureSegmentRuleMetric[] };
 }
 
 export default class FeatureSegmentRule {
@@ -42,9 +51,13 @@ export default class FeatureSegmentRule {
 
     rule_id: string | undefined;
 
+    rollout_id: string | null;
+
     rollout_type: string;
 
     rollout_configuration: RolloutConfiguration | undefined;
+
+    metric_map: { [eventKey: string]: IFeatureSegmentRuleMetric[] } | undefined;
 
     constructor({
         rules,
@@ -52,16 +65,29 @@ export default class FeatureSegmentRule {
         order,
         rollout_percentage = 100,
         rule_id = undefined,
+        rollout_id = null,
         rollout_type = Constants.MANUAL,
         rollout_configuration = undefined,
+        metrics = undefined,
+        metric_map = undefined,
     }: IFeatureSegmentRule) {
         this.rules = rules;
         this.value = value;
         this.order = order;
         this.rollout_percentage = rollout_percentage;
         this.rule_id = rule_id;
+        this.rollout_id = rollout_id;
         this.rollout_type = rollout_type;
         this.rollout_configuration = rollout_configuration;
+        this.metric_map = metric_map ?? (metrics
+            ? metrics.reduce((map: { [eventKey: string]: IFeatureSegmentRuleMetric[] }, metric) => {
+                if (metric.event_key) {
+                    map[metric.event_key] = map[metric.event_key] || [];
+                    map[metric.event_key].push({ id: metric.id, type: metric.type });
+                }
+                return map;
+            }, {})
+            : undefined);
     }
 
     public getRules(): IRule[] {
@@ -82,6 +108,10 @@ export default class FeatureSegmentRule {
 
     public getRuleId(): string | undefined {
         return this.rule_id;
+    }
+
+    public getRolloutId(): string {
+        return this.rollout_id || '';
     }
 
     public getRolloutType(): string {

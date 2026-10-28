@@ -15,10 +15,8 @@
  */
 
 import BTree from 'sorted-btree';
-import { Logger } from './logger';
+import { logger } from './logger';
 import * as Constants from "./constants";
-
-const logger = new Logger(Constants.APP_CONFIGURATION);
 
 export interface RolloutPhase {
     percentage: number;
@@ -124,7 +122,7 @@ export function parseRolloutConfigurationPhases(
         // Parse start timestamp
         const startTime = new Date(configuration.start_at);
         if (Number.isNaN(startTime.getTime())) {
-            logger.log(`Invalid start_at: ${configuration.start_at}`);
+            logger.warning(`Invalid start_at: ${configuration.start_at}`);
             return null;
         }
 
@@ -153,7 +151,7 @@ export function parseRolloutConfigurationPhases(
         return result;
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        logger.log(`Error parsing rollout configuration: ${errorMessage}`);
+        logger.warning(`Error parsing rollout configuration: ${errorMessage}`);
         return null;
     }
 }

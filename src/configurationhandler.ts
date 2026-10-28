@@ -15,6 +15,7 @@
  */
 
 import BTree from 'sorted-btree';
+import Analytics from './utils/analytics';
 import { getCacheInstance, setCache } from './models/Cache';
 import { SdkConfigResponse } from './models/SdkConfigResponse';
 import Feature, { IFeature } from './models/Feature';
@@ -25,13 +26,12 @@ import * as Constants from './utils/constants';
 import Emitter from './utils/events-handler';
 import Metering from './utils/metering';
 import UrlBuilder from './utils/urlbuilder';
-import { Logger } from './utils/logger';
+import { logger } from './utils/logger';
 import { parseRolloutConfigurationPhases, PhaseScheduler } from './utils/rollout';
 import {retryableGetConfig} from "./utils/apimanager";
 
 const urlBuilder = UrlBuilder.getInstance();
 const metering = Metering.getInstance();
-const logger = new Logger(Constants.APP_CONFIGURATION);
 
 export default class ConfigurationHandler {
     private static instance: ConfigurationHandler;
@@ -72,6 +72,7 @@ export default class ConfigurationHandler {
             isRestrictedNetwork: this.isRestrictedNetwork,
         })
         metering.init(collectionId, environmentId);
+        Analytics.getInstance().setContext(environmentId, collectionId);
         PhaseScheduler.onPhaseCallback = () => {
             Emitter.emit(Constants.CONFIGURATION_UPDATE_EVENT);
         };
@@ -98,6 +99,38 @@ export default class ConfigurationHandler {
         if (Object.keys(data.environments[0].features).length) {
             const featuresList: IFeature[] = data.environments[0].features;
             featuresList.forEach((feature) => {
+                // Build feature-level metric_map from metrics array if metric_map is absent
+                if (!feature.metric_map && Array.isArray((feature as any).metrics)) {
+                    feature.metric_map = (feature as any).metrics.reduce(
+                        (map: { [eventKey: string]: any[] }, metric: any) => {
+                            if (metric.event_key) {
+                                map[metric.event_key] = map[metric.event_key] || [];
+                                map[metric.event_key].push({ id: metric.id, type: metric.type });
+                            }
+                            return map;
+                        },
+                        {}
+                    );
+                }
+
+                // Build segment-rule level metric_map from metrics array if metric_map is absent
+                if (feature.segment_rules && feature.segment_rules.length > 0) {
+                    for (const segmentRule of feature.segment_rules) {
+                        if (!segmentRule.metric_map && Array.isArray((segmentRule as any).metrics)) {
+                            segmentRule.metric_map = (segmentRule as any).metrics.reduce(
+                                (map: { [eventKey: string]: any[] }, metric: any) => {
+                                    if (metric.event_key) {
+                                        map[metric.event_key] = map[metric.event_key] || [];
+                                        map[metric.event_key].push({ id: metric.id, type: metric.type });
+                                    }
+                                    return map;
+                                },
+                                {}
+                            );
+                        }
+                    }
+                }
+
                 _featureMap[feature.feature_id] = new Feature(feature);
                 
                 // Parse feature-level progressive rollout
@@ -106,7 +139,7 @@ export default class ConfigurationHandler {
                     if (rolloutMap) {
                         _rolloutConfigMap[feature.feature_id] = rolloutMap;
                     } else {
-                        logger.log('Error parsing feature rollout configuration');
+                        logger.info('Error parsing feature rollout configuration');
                     }
                 }
                 
@@ -119,7 +152,7 @@ export default class ConfigurationHandler {
                                 const key = feature.feature_id + Constants.DELIMITER + (segmentRule.rule_id || '');
                                 _rolloutConfigMap[key] = rolloutMap;
                             } else {
-                                logger.log('Error parsing segment rule rollout configuration');
+                                logger.info('Error parsing segment rule rollout configuration');
                             }
                         }
                     }
@@ -152,7 +185,7 @@ export default class ConfigurationHandler {
 
         if (this.isRestrictedNetwork) {
             source.addEventListener<'SSEEvent_update'>('SSEEvent_update', (_) => {
-                logger.log("Update event received. Fetching data from server...");
+                logger.info("Update event received. Fetching data from server...");
                 retryableGetConfig().then(config => {
                     this.saveInCache(config);
                     Emitter.emit(Constants.CONFIGURATION_UPDATE_EVENT);
@@ -161,7 +194,7 @@ export default class ConfigurationHandler {
         } else {
             source.addEventListener<'SSEConfig_payload'>('SSEConfig_payload', (event) => {
                 const eventData: SdkConfigResponse = JSON.parse(event.data);
-                logger.log("Update event received.");
+                logger.info("Update event received.");
                 this.saveInCache(eventData);
                 Emitter.emit(Constants.CONFIGURATION_UPDATE_EVENT);
             });
@@ -177,14 +210,14 @@ export default class ConfigurationHandler {
                     if (this.setContextConfigFetched) {
                         this.setContextConfigFetched = false;
                         Emitter.emit(Constants.REGISTRATION_EVENT);
-                        logger.log("Client registration complete.");
+                        logger.info("Client registration complete.");
                         resolve();
                     }
                     else {
                         retryableGetConfig().then(config => {
                             this.saveInCache(config);
                             Emitter.emit(Constants.REGISTRATION_EVENT);
-                            logger.log("Client registration complete.");
+                            logger.info("Client registration complete.");
                             resolve();
                         })
                     }
@@ -192,11 +225,15 @@ export default class ConfigurationHandler {
                     const eventData: SdkConfigResponse = JSON.parse(event.data);
                     this.saveInCache(eventData);
                     Emitter.emit(Constants.REGISTRATION_EVENT);
-                    logger.log("Client registration complete.");
+                    logger.info("Client registration complete.");
                     resolve();
                 }
             });
         });
+    }
+
+    async flushAnalytics(): Promise<void> {
+        await Analytics.getInstance().flush();
     }
 
     getFeature(featureId: string): Feature {

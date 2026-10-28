@@ -42,42 +42,38 @@ export default class Rule {
         if (key === undefined || key === null || value === '') {
             return result;
         }
-        let reg;
+        const keyStr = String(key);
         switch (this.operator) {
             case 'endsWith':
-                reg = new RegExp(`${value}$`, 'i');
-                result = reg.test(key);
+                result = keyStr.endsWith(value);
                 break;
             case 'notEndsWith':
-                reg = new RegExp(`${value}$`, 'i');
-                result = !reg.test(key);
+                result = !keyStr.endsWith(value);
                 break;
             case 'startsWith':
-                reg = new RegExp(`^${value}`, 'i');
-                result = reg.test(key);
+                result = keyStr.startsWith(value);
                 break;
             case 'notStartsWith':
-                reg = new RegExp(`^${value}`, 'i');
-                result = !reg.test(key);
+                result = !keyStr.startsWith(value);
                 break;
             case 'contains':
-                result = key.includes(value);
+                result = keyStr.includes(value);
                 break;
             case 'notContains':
-                result = !key.includes(value);
+                result = !keyStr.includes(value);
                 break;
             case 'is':
                 if (typeof (key) === 'number') {
                     result = (key === parseFloat(value));
                 } else {
-                    result = (key.toString() === value.toString());
+                    result = (keyStr === value.toString());
                 }
                 break;
             case 'isNot':
                 if (typeof (key) === 'number') {
                     result = (key !== parseFloat(value));
                 } else {
-                    result = (key.toString() !== value.toString());
+                    result = (keyStr !== value.toString());
                 }
                 break;
             case 'greaterThan':
