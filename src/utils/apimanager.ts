@@ -15,8 +15,6 @@
  */
 import * as Constants from './constants';
 import { APIError } from './custom-error';
-import { EvaluationEvent } from './expevaluationmetering';
-import { MetricEvent } from './expmetricmetering';
 import { MeteringRequestBody } from './metering';
 import UrlBuilder from './urlbuilder';
 import {SdkConfigResponse} from "../models/SdkConfigResponse";
@@ -74,8 +72,8 @@ export async function retryablePostMetering(
     });
 }
 
-export async function retryablePostExpEvaluationEvents(
-    data: EvaluationEvent,
+export async function retryablePostAnalytics(
+    data: { environment_id: string; collection_id: string; usages: { [key: string]: unknown }[] },
     keepalive: boolean,
     retries: number = Constants.NUMBER_OF_RETRIES
 ): Promise<void> {
@@ -86,40 +84,10 @@ export async function retryablePostExpEvaluationEvents(
         body: JSON.stringify(data),
     };
     if (keepalive) params.keepalive = true;
-    return fetch(url, params).then(async (response) => {
-        if (response.ok) {
-            return;
-        }
-        if ((response.status >= 500 && response.status <= 599) || response.status === 429) {
-            if (retries > 1) {
-                return retryablePostExpEvaluationEvents(data, keepalive, retries - 1);
-            }
-        }
-        throw new APIError(await response.text(), response.status);
-    });
-}
-
-export async function retryablePostExpMetricEvents(
-    data: MetricEvent,
-    keepalive: boolean,
-    retries: number = Constants.NUMBER_OF_RETRIES
-): Promise<void> {
-    const url = urlBuilder.getExperimentAnalyticsUrl();
-    const params: RequestInit = {
-        method: 'POST',
-        headers: urlBuilder.getAPICallHeaders(true),
-        body: JSON.stringify(data),
-    };
-    if (keepalive) params.keepalive = true;
-    return fetch(url, params).then(async (response) => {
-        if (response.ok) {
-            return;
-        }
-        if ((response.status >= 500 && response.status <= 599) || response.status === 429) {
-            if (retries > 1) {
-                return retryablePostExpMetricEvents(data, keepalive, retries - 1);
-            }
-        }
-        throw new APIError(await response.text(), response.status);
-    });
+    const response = await fetch(url, params);
+    if (response.ok) return;
+    if ((response.status >= 500 && response.status <= 599) || response.status === 429) {
+        if (retries > 1) return retryablePostAnalytics(data, keepalive, retries - 1);
+    }
+    throw new APIError(await response.text(), response.status);
 }

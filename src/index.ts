@@ -15,6 +15,7 @@
  */
 
 import ConfigurationHandler from './configurationhandler';
+import Analytics from './utils/analytics';
 import Feature from './models/Feature';
 import Property from './models/Property';
 import { fetchAvailable } from './utils/apimanager';
@@ -43,6 +44,7 @@ export default class AppConfiguration {
         }
         window.addEventListener('beforeunload', () => {
             metering.sendMetering(true);
+            Analytics.getInstance().stop();
         })
     }
 
@@ -165,6 +167,20 @@ export default class AppConfiguration {
     }
 
     /**
+     * Immediately sends all pending analytics data (guarded rollout evaluations
+     * and metric events) to the App Configuration service, without waiting for
+     * the next scheduled flush. Safe to call at any time, including on shutdown.
+     *
+     * @return {Promise<void>}
+     * @memberof AppConfiguration
+     */
+    async flushRecords(): Promise<void> {
+        if (this.isInitialized && this.isInitializedContext) {
+            await configurationHandlerInstance.flushAnalytics();
+        }
+    }
+
+    /**
      * Instance of {@link EventEmitter} to listen to live configuration updates.
      *
      * @memberof AppConfiguration
@@ -182,18 +198,6 @@ export default class AppConfiguration {
         } else {
             setLoggerConfig({ level: this.logLevel as LogLevel });
         }
-    }
-
-    /**
-     * Method to record the user engagement while running an experiment.
-     * @param {string} eventKey - SDK event key
-     * @param {string} entityId - The entityId
-     */
-    track(eventKey: string, entityId: string): void {
-        if (this.isInitialized && this.isInitializedContext) {
-            return configurationHandlerInstance.track(eventKey, entityId);
-        }
-        throw new Error(''.concat(Constants.APP_CONFIGURATION, 'track: SDK not initialised.'));
     }
 
     /**

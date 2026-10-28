@@ -15,6 +15,7 @@
  */
 
 import BTree from 'sorted-btree';
+import Analytics from './utils/analytics';
 import { getCacheInstance, setCache } from './models/Cache';
 import { SdkConfigResponse } from './models/SdkConfigResponse';
 import Feature, { IFeature } from './models/Feature';
@@ -26,15 +27,11 @@ import Emitter from './utils/events-handler';
 import Metering from './utils/metering';
 import UrlBuilder from './utils/urlbuilder';
 import { logger } from './utils/logger';
-import ExpMetricMetering from './utils/expmetricmetering';
-import ExpEvalMetering from './utils/expevaluationmetering';
 import { parseRolloutConfigurationPhases, PhaseScheduler } from './utils/rollout';
 import {retryableGetConfig} from "./utils/apimanager";
 
 const urlBuilder = UrlBuilder.getInstance();
 const metering = Metering.getInstance();
-const evaluationEvents = ExpEvalMetering.getInstance();
-const metricEvents = ExpMetricMetering.getInstance();
 
 export default class ConfigurationHandler {
     private static instance: ConfigurationHandler;
@@ -75,8 +72,7 @@ export default class ConfigurationHandler {
             isRestrictedNetwork: this.isRestrictedNetwork,
         })
         metering.init(collectionId, environmentId);
-        evaluationEvents.init(environmentId);
-        metricEvents.init(environmentId);
+        Analytics.getInstance().setContext(environmentId, collectionId);
         PhaseScheduler.onPhaseCallback = () => {
             Emitter.emit(Constants.CONFIGURATION_UPDATE_EVENT);
         };
@@ -93,14 +89,6 @@ export default class ConfigurationHandler {
         }
     }
 
-    track(eventKey: string, entityId: string) {
-        if (eventKey?.length > 0 && entityId?.length > 0) {
-            ExpMetricMetering.getInstance().addMetering(eventKey, entityId);
-            return
-        }
-        logger.error('eventKey or entityId cannot be empty');
-    }
-
     saveInCache(data: SdkConfigResponse) {
 
         PhaseScheduler.reset();
@@ -111,6 +99,38 @@ export default class ConfigurationHandler {
         if (Object.keys(data.environments[0].features).length) {
             const featuresList: IFeature[] = data.environments[0].features;
             featuresList.forEach((feature) => {
+                // Build feature-level metric_map from metrics array if metric_map is absent
+                if (!feature.metric_map && Array.isArray((feature as any).metrics)) {
+                    feature.metric_map = (feature as any).metrics.reduce(
+                        (map: { [eventKey: string]: any[] }, metric: any) => {
+                            if (metric.event_key) {
+                                map[metric.event_key] = map[metric.event_key] || [];
+                                map[metric.event_key].push({ id: metric.id, type: metric.type });
+                            }
+                            return map;
+                        },
+                        {}
+                    );
+                }
+
+                // Build segment-rule level metric_map from metrics array if metric_map is absent
+                if (feature.segment_rules && feature.segment_rules.length > 0) {
+                    for (const segmentRule of feature.segment_rules) {
+                        if (!segmentRule.metric_map && Array.isArray((segmentRule as any).metrics)) {
+                            segmentRule.metric_map = (segmentRule as any).metrics.reduce(
+                                (map: { [eventKey: string]: any[] }, metric: any) => {
+                                    if (metric.event_key) {
+                                        map[metric.event_key] = map[metric.event_key] || [];
+                                        map[metric.event_key].push({ id: metric.id, type: metric.type });
+                                    }
+                                    return map;
+                                },
+                                {}
+                            );
+                        }
+                    }
+                }
+
                 _featureMap[feature.feature_id] = new Feature(feature);
                 
                 // Parse feature-level progressive rollout
@@ -210,6 +230,10 @@ export default class ConfigurationHandler {
                 }
             });
         });
+    }
+
+    async flushAnalytics(): Promise<void> {
+        await Analytics.getInstance().flush();
     }
 
     getFeature(featureId: string): Feature {

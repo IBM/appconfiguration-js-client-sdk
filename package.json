@@ -28,7 +28,8 @@
     "clean": "del-cli dist/*",
     "lint:check": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test": "jest"
+    "test": "jest",
+    "test:unit": "jest --runInBand --detectOpenHandles --forceExit"
   },
   "dependencies": {
     "eventemitter3": "^4.0.7",
@@ -40,7 +41,7 @@
     "@typescript-eslint/eslint-plugin": "^5.27.1",
     "@typescript-eslint/parser": "^5.27.1",
     "del-cli": "^4.0.1",
-    "eslint": "^8.17.0",
+    "eslint": "^8.57.1",
     "eslint-config-airbnb-base": "^15.0.0",
     "eslint-config-airbnb-typescript": "^17.0.0",
     "eslint-config-prettier": "^8.5.0",

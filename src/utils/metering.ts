@@ -65,6 +65,11 @@ export default class Metering {
 
     private constructor() { /* singleton design pattern */ }
 
+    public stop(): void {
+        this.stopTimer();
+        this.startMetering = false;
+    }
+
     init(collectionId: string, environmentId: string) {
         this.collectionId = collectionId;
         this.environmentId = environmentId;

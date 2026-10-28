@@ -3,3 +3,4 @@ dist/
 /typedoc
 .DS_Store
 .idea
+coverage/

@@ -10,6 +10,19 @@ IBM Cloud App Configuration JavaScript Client SDK is used to perform feature fla
 - [Overview](#overview)
 - [Installation](#installation)
 - [Initialize SDK](#initialize-sdk)
+- [Client in Restricted network case](#client-in-restricted-network-case)
+- [Get single feature](#get-single-feature)
+- [Get all features](#get-all-features)
+- [Evaluate a feature](#evaluate-a-feature)
+- [Track metrics (Guarded rollout)](#track-metrics-guarded-rollout)
+  - [Example: Evaluating and tracking a guarded feature](#example-evaluating-and-tracking-a-guarded-feature)
+- [Get single property](#get-single-property)
+- [Get all properties](#get-all-properties)
+- [Evaluate a property](#evaluate-a-property)
+- [Logging](#logging)
+- [Supported Data types](#supported-data-types)
+- [Set listener for feature and property data changes](#set-listener-for-feature-and-property-data-changes)
+- [Examples](#examples)
 - [License](#license)
 
 ## Overview
@@ -156,15 +169,53 @@ const featureValue = feature.getCurrentValue(entityId, entityAttributes);
 - entityId: Id of the Entity. This will be a string identifier related to the Entity against which the feature is evaluated. For example, an entity might be an instance of an app that runs on a mobile device, or a user accessing the web application. For any entity to interact with App Configuration, it must provide a unique entity ID.
 - entityAttributes: A JSON object consisting of the attribute name and their values that defines the specified entity. This is an optional parameter if the feature flag is not configured with any targeting definition. If the targeting is configured, then entityAttributes should be provided for the rule evaluation. An attribute is a parameter that is used to define a segment. The SDK uses the attribute values to determine if the specified entity satisfies the targeting rules, and returns the appropriate feature flag value.
 
-## Send custom metrics
+## Track metrics (Guarded rollout)
 
-Record custom metrics to use in experimentation using the track function.
+When a feature flag is configured with a **Guarded Rollout** in the IBM Cloud App Configuration service, you can measure the impact of the feature by tracking user interactions or business metrics (such as button clicks, page visits, conversions, or error rates).
+
+In the App Configuration dashboard, metrics are associated with an **Event Key** (the event identifier configured for that feature flag's metric).
+
+Use the `feature.track(eventKey, entityId)` method to record a metric event for an entity.
 
 ```javascript
-appConfigClient.track(eventKey, entityId)
+const eventKey = 'checkout_click'; // The event key configured for the metric in App Configuration service
+const entityId = 'john_doe';
+
+feature.track(eventKey, entityId);
 ```
-where
-- eventKey: The event key for the metric associated with the running experiment. The event key in your metric and the event key in your code must match exactly.
+
+- `eventKey`: A string identifying the event, as configured for the metric in the App Configuration service instance (e.g. `'checkout_click'`, `'purchase_completed'`).
+- `entityId`: Id of the Entity. This string identifier must match the `entityId` used when evaluating the feature flag with `getCurrentValue()`.
+
+### Example: Evaluating and tracking a guarded feature
+
+```javascript
+const appConfigClient = AppConfiguration.getInstance();
+const feature = appConfigClient.getFeature('checkout-redesign');
+
+const entityId = 'user_12345';
+const entityAttributes = {
+  city: 'Bangalore',
+  country: 'India',
+};
+
+// 1. Evaluate the feature value for the entity
+const featureValue = feature.getCurrentValue(entityId, entityAttributes);
+
+// 2. Perform actions based on the evaluated feature value in your application
+// ...
+
+// 3. When the user performs the event (e.g. clicks the checkout button), track it
+feature.track('checkout_click', entityId);
+```
+
+## Flush pending records
+
+Use `flushRecords()` to immediately send all pending analytics data to the App Configuration service, without waiting for the next scheduled flush. This is useful on page unload or before your application exits to ensure no metric events are lost.
+
+```javascript
+await appConfigClient.flushRecords();
+```
 
 ## Get single property
 
