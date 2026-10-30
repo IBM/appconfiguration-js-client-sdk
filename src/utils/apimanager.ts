@@ -71,3 +71,23 @@ export async function retryablePostMetering(
         throw new APIError(await response.text(), response.status);
     });
 }
+
+export async function retryablePostAnalytics(
+    data: { environment_id: string; collection_id: string; usages: { [key: string]: unknown }[] },
+    keepalive: boolean,
+    retries: number = Constants.NUMBER_OF_RETRIES
+): Promise<void> {
+    const url = urlBuilder.getAnalyticsUrl();
+    const params: RequestInit = {
+        method: 'POST',
+        headers: urlBuilder.getAPICallHeaders(true),
+        body: JSON.stringify(data),
+    };
+    if (keepalive) params.keepalive = true;
+    const response = await fetch(url, params);
+    if (response.ok) return;
+    if ((response.status >= 500 && response.status <= 599) || response.status === 429) {
+        if (retries > 1) return retryablePostAnalytics(data, keepalive, retries - 1);
+    }
+    throw new APIError(await response.text(), response.status);
+}

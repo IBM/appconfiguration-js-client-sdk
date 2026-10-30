@@ -16,12 +16,12 @@
 
 import * as Constants from '../utils/constants';
 import { getNormalizedValue } from '../utils/hashing';
+import Analytics from '../utils/analytics';
+import { EventType, AnalyticsMetric } from '../utils/analyticsrecord';
 import Metering from '../utils/metering';
 import { getCacheInstance } from './Cache';
 import FeatureSegmentRule, { IFeatureSegmentRule } from './FeatureSegmentRule';
-import { Logger } from '../utils/logger';
-
-const logger = new Logger(Constants.APP_CONFIGURATION);
+import { logger } from '../utils/logger';
 import { RolloutConfiguration, getCurrentRolloutPercentage } from '../utils/rollout';
 import { PROGRESSIVE } from "../utils/constants";
 
@@ -36,7 +36,16 @@ export interface IFeature {
     enabled: boolean;
     rollout_percentage?: number;
     rollout_type?: string;
+    rollout_id?: string | null;
+    metrics?: IFeatureMetric[];
+    metric_map?: { [eventKey: string]: IFeatureMetric[] };
     rollout_configuration?: RolloutConfiguration;
+}
+
+export interface IFeatureMetric {
+    id: string;
+    type: string;
+    event_key?: string;
 }
 
 interface EvaluationResult {
@@ -64,6 +73,10 @@ export default class Feature {
 
     private rollout_percentage: number;
 
+    private rollout_id: string | null;
+
+    private metric_map: { [eventKey: string]: IFeatureMetric[] };
+
     private rollout_type: string;
 
     private rollout_configuration: RolloutConfiguration | undefined;
@@ -79,6 +92,9 @@ export default class Feature {
         enabled,
         rollout_percentage = 100,
         rollout_type = Constants.MANUAL,
+        rollout_id = null,
+        metrics = [],
+        metric_map = undefined,
         rollout_configuration = undefined,
     }: IFeature) {
         this.name = name;
@@ -92,6 +108,14 @@ export default class Feature {
         this.segment_rules = [];
         for (const element of segment_rules) this.segment_rules.push(new FeatureSegmentRule(element));
         this.rollout_type = rollout_type;
+        this.rollout_id = rollout_id;
+        this.metric_map = metric_map || metrics.reduce((map: { [eventKey: string]: IFeatureMetric[] }, metric) => {
+            if (metric.event_key) {
+                map[metric.event_key] = map[metric.event_key] || [];
+                map[metric.event_key].push({ id: metric.id, type: metric.type });
+            }
+            return map;
+        }, {});
         this.rollout_configuration = rollout_configuration;
     }
 
@@ -151,6 +175,95 @@ export default class Feature {
         return this.enabled;
     }
 
+    public getRolloutId(): string {
+        return this.rollout_id || '';
+    }
+
+    public getMetricMap(): { [eventKey: string]: IFeatureMetric[] } {
+        return this.metric_map;
+    }
+
+    public track(eventKey: string, entityId: string): void {
+        if (typeof entityId !== 'string' || entityId.trim() === '') {
+            logger.warning('track: entityId must be a non-empty string');
+            return;
+        }
+        if (typeof eventKey !== 'string' || eventKey.trim() === '') {
+            logger.warning('track: eventKey must be a non-empty string');
+            return;
+        }
+
+        // Resolve metric map: check segment-rule metric_maps first, then fall back to feature-level.
+        let resolvedMetricMap: { [eventKey: string]: IFeatureMetric[] } | undefined;
+        for (const rule of this.segment_rules) {
+            const segRule = new FeatureSegmentRule(rule);
+            if (segRule.metric_map && Object.prototype.hasOwnProperty.call(segRule.metric_map, eventKey)) {
+                resolvedMetricMap = segRule.metric_map as { [eventKey: string]: IFeatureMetric[] };
+                break;
+            }
+        }
+        if (resolvedMetricMap === undefined) {
+            resolvedMetricMap = this.metric_map;
+        }
+
+        if (!resolvedMetricMap || !Object.prototype.hasOwnProperty.call(resolvedMetricMap, eventKey)) {
+            logger.warning(`The event key:${eventKey} was not found in this feature and its segment rules:${this.feature_id}`);
+            return;
+        }
+        const metrics = resolvedMetricMap[eventKey];
+        let rolloutId: string | null = null;
+        let percentage = 0;
+        const guardedRule = this.segment_rules.find((rule) => rule.rollout_type === Constants.GUARDED);
+        if (this.rollout_type === Constants.GUARDED) {
+            rolloutId = this.rollout_id;
+            percentage = this.rollout_percentage;
+        } else if (guardedRule) {
+            rolloutId = guardedRule.rollout_id || null;
+            percentage = guardedRule.rollout_percentage === Constants.DEFAULT_ROLLOUT_PERCENTAGE
+                ? this.rollout_percentage : Number(guardedRule.rollout_percentage);
+        }
+        if (!rolloutId) {
+            logger.warning('This feature or any of its segment rules is not configured for guarded rollout');
+            return;
+        }
+        const normalized = getNormalizedValue([entityId, this.feature_id, rolloutId].join(':'));
+        const valueServed = normalized < percentage ? 'target' : normalized < 2 * percentage ? 'original' : null;
+        if (valueServed) {
+            const metric: AnalyticsMetric = { rollout_id: rolloutId, entity_id: entityId, event_key: eventKey, metrics, value_served: valueServed };
+            Analytics.getInstance().addMetric(metric, EventType.GUARDED_METRIC);
+        }
+    }
+
+    private addGuardedEvaluation(rolloutId: string | null, entityId: string, percentage: number, normalized: number): void {
+        if (!rolloutId) return;
+        const valueServed = normalized < percentage ? 'target' : normalized < 2 * percentage ? 'original' : null;
+        if (valueServed) {
+            Analytics.getInstance().addMetric({ rollout_id: rolloutId, entity_id: entityId, value_served: valueServed }, EventType.GUARDED_EVALUATION);
+        }
+    }
+
+    private getNormalizedForFeature(entityId: string): number {
+        let suffix = '';
+        if (this.rollout_configuration || this.rollout_type === Constants.PROGRESSIVE) {
+            suffix = this.rollout_configuration?.start_at || '';
+        } else if (this.rollout_type === Constants.GUARDED) {
+            suffix = this.rollout_id || '';
+        }
+        const key = [entityId, this.feature_id, suffix].filter((value) => value !== '').join(':');
+        return getNormalizedValue(key);
+    }
+
+    private getNormalizedForRule(rule: FeatureSegmentRule, entityId: string): number {
+        let suffix = '';
+        if (rule.getRolloutConfiguration() || rule.getRolloutType() === Constants.PROGRESSIVE) {
+            suffix = rule.getRolloutConfiguration()?.start_at || this.rollout_configuration?.start_at || '';
+        } else if (rule.getRolloutType() === Constants.GUARDED) {
+            suffix = rule.getRolloutId();
+        }
+        const key = [entityId, this.feature_id, suffix].filter((value) => value !== '').join(':');
+        return getNormalizedValue(key);
+    }
+
     /**
      * Get the evaluated value of the feature flag.
      *
@@ -170,7 +283,7 @@ export default class Feature {
      */
     public getCurrentValue(entityId: string, entityAttributes: { [x: string]: any; } = {}): any {
         if (!entityId) {
-            logger.log(''.concat('Feature flag evaluation: ', Constants.INVALID_ENTITY_ID, ' getCurrentValue'));
+            logger.warning(''.concat('Feature flag evaluation: ', Constants.INVALID_ENTITY_ID, ' getCurrentValue'));
             return null;
         }
 
@@ -196,16 +309,13 @@ export default class Feature {
                 let rolloutPercentage;
                 if (this.rollout_configuration || this.rollout_type === PROGRESSIVE) {
                     const rolloutMap = getCacheInstance().rolloutConfigMap[this.feature_id];
-                    if (rolloutMap) {
-                        entityId += this.rollout_configuration?.start_at;
-                        rolloutPercentage = getCurrentRolloutPercentage(rolloutMap);
-                    } else {
-                        rolloutPercentage = 0;
-                    }
+                    rolloutPercentage = rolloutMap ? getCurrentRolloutPercentage(rolloutMap) : 0;
                 } else {
                     rolloutPercentage = this.rollout_percentage;
                 }
-                if (rolloutPercentage === 100 || (getNormalizedValue(''.concat(entityId, ':', this.feature_id)) < rolloutPercentage)) {
+                const normalized = this.getNormalizedForFeature(entityId);
+                this.addGuardedEvaluation(this.rollout_type === Constants.GUARDED ? this.rollout_id : null, entityId, rolloutPercentage, normalized);
+                if (rolloutPercentage === 100 || normalized < rolloutPercentage) {
                     return { current_value: this.enabled_value, is_enabled: true };
                 }
                 return { current_value: this.disabled_value, is_enabled: false };
@@ -259,7 +369,6 @@ export default class Feature {
                                             rolloutMap = getCacheInstance().rolloutConfigMap[key];
                                         }
                                         if (rolloutMap) {
-                                            entityId += segmentRuleObj.getRolloutConfiguration()?.start_at;
                                             segmentLevelRolloutPercentage = getCurrentRolloutPercentage(rolloutMap);
                                         } else {
                                             segmentLevelRolloutPercentage = 0;
@@ -269,7 +378,9 @@ export default class Feature {
                                         segmentLevelRolloutPercentage = segmentRule.rollout_percentage === Constants.DEFAULT_ROLLOUT_PERCENTAGE ? this.rollout_percentage : segmentRule.rollout_percentage as number;
                                     }
                                     // check whether the entityId is eligible for segment rollout
-                                    if (segmentLevelRolloutPercentage === 100 || (getNormalizedValue(''.concat(entityId, ':', this.feature_id)) < segmentLevelRolloutPercentage)) {
+                                    const normalized = this.getNormalizedForRule(segmentRuleObj, entityId);
+                                    this.addGuardedEvaluation(segmentRuleObj.getRolloutType() === Constants.GUARDED ? segmentRuleObj.getRolloutId() : null, entityId, Number(segmentLevelRolloutPercentage), normalized);
+                                    if (segmentLevelRolloutPercentage === 100 || normalized < segmentLevelRolloutPercentage) {
                                         // since the entityId is eligible for segment rollout the return value should be either of inherited or overridden value
                                         if (segmentRule.value === Constants.DEFAULT_FEATURE_VALUE) {
                                             resultDict.value = this.enabled_value; // return the inherited value
@@ -297,16 +408,13 @@ export default class Feature {
         let rolloutPercentage;
         if (this.rollout_configuration || this.rollout_type === PROGRESSIVE) {
             const rolloutMap = getCacheInstance().rolloutConfigMap[this.feature_id];
-            if (rolloutMap) {
-                entityId += this.rollout_configuration?.start_at;
-                rolloutPercentage = getCurrentRolloutPercentage(rolloutMap);
-            } else {
-                rolloutPercentage = 0;
-            }
+            rolloutPercentage = rolloutMap ? getCurrentRolloutPercentage(rolloutMap) : 0;
         } else {
             rolloutPercentage = this.rollout_percentage;
         }
-        if (rolloutPercentage === 100 || (getNormalizedValue(''.concat(entityId, ':', this.feature_id)) < rolloutPercentage)) {
+        const normalized = this.getNormalizedForFeature(entityId);
+        this.addGuardedEvaluation(this.rollout_type === Constants.GUARDED ? this.rollout_id : null, entityId, rolloutPercentage, normalized);
+        if (rolloutPercentage === 100 || normalized < rolloutPercentage) {
             resultDict.value = this.enabled_value;
             resultDict.is_enabled = true;
         } else {

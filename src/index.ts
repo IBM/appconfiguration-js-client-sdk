@@ -15,11 +15,13 @@
  */
 
 import ConfigurationHandler from './configurationhandler';
+import Analytics from './utils/analytics';
 import Feature from './models/Feature';
 import Property from './models/Property';
 import { fetchAvailable } from './utils/apimanager';
 import * as Constants from './utils/constants';
 import Emitter from './utils/events-handler';
+import { LogLevel, setLoggerConfig } from './utils/logger';
 import Metering from './utils/metering';
 
 const configurationHandlerInstance = ConfigurationHandler.getInstance();
@@ -34,12 +36,15 @@ export default class AppConfiguration {
 
     private isInitializedContext = false;
 
+    private logLevel = 'info';  // Default level
+
     private constructor() {
         if (!fetchAvailable()) {
             throw new Error(''.concat(Constants.APP_CONFIGURATION, 'Either provide your own "fetch" implementation or run in an environment where "fetch" is available.'));
         }
         window.addEventListener('beforeunload', () => {
             metering.sendMetering(true);
+            Analytics.getInstance().stop();
         })
     }
 
@@ -162,6 +167,20 @@ export default class AppConfiguration {
     }
 
     /**
+     * Immediately sends all pending analytics data (guarded rollout evaluations
+     * and metric events) to the App Configuration service, without waiting for
+     * the next scheduled flush. Safe to call at any time, including on shutdown.
+     *
+     * @return {Promise<void>}
+     * @memberof AppConfiguration
+     */
+    async flushRecords(): Promise<void> {
+        if (this.isInitialized && this.isInitializedContext) {
+            await configurationHandlerInstance.flushAnalytics();
+        }
+    }
+
+    /**
      * Instance of {@link EventEmitter} to listen to live configuration updates.
      *
      * @memberof AppConfiguration
@@ -169,8 +188,21 @@ export default class AppConfiguration {
     emitter = Emitter;
 
     /**
+     * Set the logging level to one of 'debug' | 'info' | 'warning' | 'error';
+     * @param {string} level
+     * @memberof AppConfiguration
+     */
+    setLogLevel(level: string): void {
+        if (level && ['debug', 'info', 'warning', 'error'].includes(level)) {
+            setLoggerConfig({ level: level as LogLevel });
+        } else {
+            setLoggerConfig({ level: this.logLevel as LogLevel });
+        }
+    }
+
+    /**
      * @internal
-     * 
+     *
      * Override the default App Configuration URL. This method should be invoked before the SDK initialization.
      * ```js
      * // Example

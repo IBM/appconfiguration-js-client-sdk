@@ -32,6 +32,7 @@ export const INVALID_ENTITY_ID = 'Invalid entityId passed to';
 // Rollout types
 export const MANUAL = 'MANUAL';
 export const PROGRESSIVE = 'PROGRESSIVE';
+export const GUARDED = 'GUARDED';
 
 // Delimiter for composite keys
 export const DELIMITER = '\u001F';
